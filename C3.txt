@@ -1,0 +1,5095 @@
+### USER
+What do I do now?
+
+### ASSISTANT
+You are at the end of **Step 8**: your smart decompressor works, the registry works, vanilla fallback works, and missing-dictionary failure works safely.
+
+So your next move is to **close this checkpoint**, then choose whether to do the quiz or continue to Step 9.
+
+---
+
+## 1. Make sure your registry is correct
+
+Run:
+
+```bash
+cat registry.json
+```
+
+It should contain your actual Dictionary ID. Based on your earlier output, that was:
+
+```json
+{
+  "1163550679": "dictionary.bin"
+}
+```
+
+If you changed it during the broken-registry test and then fixed it, you are fine.
+
+---
+
+## 2. Optional cleanup
+
+You may have extra files like:
+
+```text
+broken.json
+recovered_smart.json
+recovered_vanilla.json
+```
+
+Those were just test outputs. You can keep them, or delete the ones you do not need.
+
+For example:
+
+```bash
+rm broken.json
+```
+
+Only delete files you are sure you do not need.
+
+---
+
+## 3. Now choose your next path
+
+You have two options.
+
+### Option A: Answer the pending quiz
+
+Reply with your answers in this format:
+
+```text
+1A, 2B, 3C
+Essay: ...
+```
+
+Do not ask me for the answers yet. Attempt them first.
+
+---
+
+### Option B: Skip the quiz and move forward
+
+If you want to continue directly to the next development step, reply:
+
+```text
+Skip quiz
+```
+
+Then we will move to:
+
+```text
+Step 9: Version the dictionary files
+```
+
+In Step 9, we will turn this into a more production-like setup:
+
+```text
+dictionary_v1.bin
+dictionary_v2.bin
+registry.json
+```
+
+so your decompressor can handle multiple dictionary versions instead of assuming there is only one dictionary forever.
+
+---
+
+## Fastest next action
+
+If you already understand the current step and want to continue, send:
+
+```text
+Skip quiz
+```
+
+### USER
+Step 9!
+
+### ASSISTANT
+## Step 9: Version the dictionary file
+
+Now we make the project more production-like.
+
+Right now your dictionary is probably named:
+
+```text
+dictionary.bin
+```
+
+That name is fine for learning, but in a real system you may train many dictionaries over time:
+
+```text
+dictionary_v1.bin
+dictionary_v2.bin
+dictionary_v3.bin
+```
+
+Old compressed files may need the old dictionary. New compressed files may need a newer dictionary. So we version the dictionary file and let `registry.json` map the Dictionary ID to the correct file.
+
+---
+
+# 1. Check your current state
+
+Run:
+
+```bash
+ls -lh
+```
+
+You should see at least these files:
+
+```text
+example.json
+example.zst
+dictionary.bin
+registry.json
+smart_decompress.py
+inspect.py
+```
+
+Then check your current registry:
+
+```bash
+cat registry.json
+```
+
+Based on your earlier work, it probably looks like this:
+
+```json
+{
+  "1163550679": "dictionary.bin"
+}
+```
+
+Your Dictionary ID may be different. That is okay. Keep your actual ID.
+
+---
+
+# 2. Rename the dictionary file
+
+Rename:
+
+```bash
+mv dictionary.bin dictionary_v1.bin
+```
+
+Check:
+
+```bash
+ls -lh dictionary_v1.bin
+```
+
+You should see something like:
+
+```text
+-rw-r--r-- 1 user user ... dictionary_v1.bin
+```
+
+Important: renaming the file does **not** change the Dictionary ID. The Dictionary ID is part of the dictionary content and the compressed frame, not the filename.
+
+---
+
+# 3. Update `registry.json`
+
+Now update the registry so it points to the new filename.
+
+Run this:
+
+```bash
+python - <<'PY'
+import json
+from pathlib import Path
+
+path = Path("registry.json")
+registry = json.loads(path.read_text())
+
+updated = False
+
+for dict_id, filename in registry.items():
+    if filename == "dictionary.bin":
+        registry[dict_id] = "dictionary_v1.bin"
+        updated = True
+
+if updated:
+    path.write_text(json.dumps(registry, indent=2) + "\n")
+    print("Registry updated.")
+else:
+    print("No registry entry pointed to dictionary.bin. Check registry.json manually.")
+
+print(json.dumps(registry, indent=2))
+PY
+```
+
+If your system requires Python 3 explicitly, use:
+
+```bash
+python3 - <<'PY'
+import json
+from pathlib import Path
+
+path = Path("registry.json")
+registry = json.loads(path.read_text())
+
+updated = False
+
+for dict_id, filename in registry.items():
+    if filename == "dictionary.bin":
+        registry[dict_id] = "dictionary_v1.bin"
+        updated = True
+
+if updated:
+    path.write_text(json.dumps(registry, indent=2) + "\n")
+    print("Registry updated.")
+else:
+    print("No registry entry pointed to dictionary.bin. Check registry.json manually.")
+
+print(json.dumps(registry, indent=2))
+PY
+```
+
+Expected output should be something like:
+
+```text
+Registry updated.
+{
+  "1163550679": "dictionary_v1.bin"
+}
+```
+
+Again, your Dictionary ID may be different.
+
+---
+
+# 4. Verify the registry manually
+
+Run:
+
+```bash
+cat registry.json
+```
+
+You should now see the versioned filename:
+
+```json
+{
+  "1163550679": "dictionary_v1.bin"
+}
+```
+
+If yours shows a different Dictionary ID, that is fine. The important part is:
+
+```json
+"dictionary_v1.bin"
+```
+
+---
+
+# 5. Decompress using the versioned dictionary
+
+Run:
+
+```bash
+python smart_decompress.py example.zst step9_check.json
+```
+
+Or, if needed:
+
+```bash
+python3 smart_decompress.py example.zst step9_check.json
+```
+
+The exact output depends on how your `smart_decompress.py` prints messages, but the important result is:
+
+```text
+step9_check.json
+```
+
+is created successfully.
+
+Then compare it to the original:
+
+```bash
+diff example.json step9_check.json && echo OK
+```
+
+Expected:
+
+```text
+OK
+```
+
+If you are on Windows and `diff` is not available, you can open both files and visually compare them, or use:
+
+```powershell
+fc example.json step9_check.json
+```
+
+---
+
+# 6. Clean up the temporary check file
+
+Optional:
+
+```bash
+rm step9_check.json
+```
+
+Keep:
+
+```text
+example.json
+example.zst
+dictionary_v1.bin
+registry.json
+smart_decompress.py
+inspect.py
+```
+
+---
+
+# Common pitfall
+
+Do not leave `registry.json` pointing to:
+
+```text
+dictionary.bin
+```
+
+after you renamed the file.
+
+If the registry still says:
+
+```json
+{
+  "1163550679": "dictionary.bin"
+}
+```
+
+but the file is now named:
+
+```text
+dictionary_v1.bin
+```
+
+then your smart decompressor may fail to find the dictionary.
+
+The registry is the bridge between:
+
+```text
+Dictionary ID → dictionary file
+```
+
+---
+
+# Step 9 completion check
+
+You have completed Step 9 when all of these are true:
+
+```text
+dictionary.bin has been renamed to dictionary_v1.bin
+registry.json points to dictionary_v1.bin
+smart_decompress.py can decompress example.zst
+step9_check.json matches example.json
+```
+
+---
+
+# Quick quiz
+
+Answer these before we move to Step 10.
+
+### Question 1
+
+Why rename `dictionary.bin` to `dictionary_v1.bin`?
+
+A. Because zstd requires dictionary filenames to include versions  
+B. To allow multiple dictionary versions to exist and be selected correctly  
+C. To automatically increase compression ratio  
+D. To change the Dictionary ID  
+
+---
+
+### Question 2
+
+In `registry.json`, what should be used as the key?
+
+A. The dictionary filename  
+B. The zstd Dictionary ID  
+C. The JSON field name  
+D. The compression level  
+
+---
+
+### Question 3
+
+If you rename the dictionary file but forget to update `registry.json`, what is the most likely result?
+
+A. The Dictionary ID inside old `.zst` files changes automatically  
+B. The compressed file becomes corrupted  
+C. The decompressor may fail to find the correct dictionary  
+D. zstd automatically searches all files until it finds the correct dictionary  
+
+---
+
+### Essay
+
+In one or two sentences, explain why dictionary versioning matters when your training data changes over time.
+
+---
+
+When you are ready, reply with:
+
+```text
+1?, 2?, 3?, Essay: ...
+```
+
+Or, if you want to continue immediately, reply:
+
+```text
+Skip quiz
+```
+
+### USER
+I'm on linux mint, btw.
+1.B
+2.B
+3.C
+4. Versioning facilitates the accurate mapping of the dictionary file to the registry so we find the appropriate dictionary ID to compress and decompress.
+
+### ASSISTANT
+Nice work. Your quiz score is:
+
+```text
+Multiple choice: 3 / 3
+Essay: partially correct, but needs refinement
+```
+
+---
+
+# Question 1
+
+You answered:
+
+```text
+B
+```
+
+✅ Correct.
+
+Renaming to:
+
+```text
+dictionary_v1.bin
+```
+
+lets multiple dictionary versions exist:
+
+```text
+dictionary_v1.bin
+dictionary_v2.bin
+dictionary_v3.bin
+```
+
+The decompressor can then choose the correct one using the Dictionary ID.
+
+---
+
+# Question 2
+
+You answered:
+
+```text
+B
+```
+
+✅ Correct.
+
+The key in `registry.json` should be the **zstd Dictionary ID**.
+
+Example:
+
+```json
+{
+  "1163550679": "dictionary_v1.bin"
+}
+```
+
+The Dictionary ID is the stable identifier. The filename is just where the dictionary bytes are stored.
+
+---
+
+# Question 3
+
+You answered:
+
+```text
+C
+```
+
+✅ Correct.
+
+If you rename the dictionary file but do not update `registry.json`, the smart decompressor may look for a file that no longer exists.
+
+Example:
+
+```json
+{
+  "1163550679": "dictionary.bin"
+}
+```
+
+but the real file is now:
+
+```text
+dictionary_v1.bin
+```
+
+That mismatch can cause decompression to fail.
+
+---
+
+# Essay feedback
+
+Your answer:
+
+> Versioning facilitates the accurate mapping of the dictionary file to the registry so we find the appropriate dictionary ID to compress and decompress.
+
+This is on the right track, but the direction needs a small correction.
+
+The registry mainly maps:
+
+```text
+Dictionary ID → dictionary file
+```
+
+not:
+
+```text
+dictionary file → Dictionary ID
+```
+
+Also, decompression is the main place where the Dictionary ID is read from the compressed file and used to find the correct dictionary.
+
+A stronger answer would be:
+
+> When API data changes, we may train a new dictionary version. Old compressed files still contain the old Dictionary ID and need the old dictionary, while new compressed files may use a new Dictionary ID. Versioning plus a registry lets the decompressor select the correct dictionary file for each compressed payload.
+
+Minimal pair:
+
+```text
+Dictionary ID:
+A small numeric tag inside the compressed file.
+
+Dictionary file:
+The actual trained binary data, such as dictionary_v1.bin.
+
+Registry:
+Maps Dictionary ID → dictionary file.
+```
+
+---
+
+# Now: confirm Step 9 on Linux Mint
+
+You answered the quiz, but I still want to confirm that the actual Step 9 file versioning worked.
+
+Run these commands:
+
+```bash
+cd /home/comp/Desktop/AIDA/PROJECTS/DICT_PROJECT/zstd-small-files
+source .venv/bin/activate
+pwd
+ls -lh
+cat registry.json
+```
+
+Then test decompression:
+
+```bash
+python smart_decompress.py example.zst step9_check.json
+cmp example.json step9_check.json && echo "Step 9 OK"
+```
+
+If everything worked, you should see something like:
+
+```text
+Step 9 OK
+```
+
+Also, your `registry.json` should now point to:
+
+```text
+dictionary_v1.bin
+```
+
+For your earlier Dictionary ID, it should look like:
+
+```json
+{
+  "1163550679": "dictionary_v1.bin"
+}
+```
+
+---
+
+If you already did this successfully, reply:
+
+```text
+Done
+```
+
+If you get an error, paste the exact terminal output.
+
+### USER
+comp@comp:~/Desktop/AIDA/PROJECTS/DICT_PROJECT/zstd-small-files$ .source venv/bin/activate
+.source: command not found
+comp@comp:~/Desktop/AIDA/PROJECTS/DICT_PROJECT/zstd-small-files$ source .venv/bin/activate
+(.venv) comp@comp:~/Desktop/AIDA/PROJECTS/DICT_PROJECT/zstd-small-files$ ls -lh
+total 100K
+-rw-rw-r-- 1 comp comp 4.1K Sep 18 21:51 benchmark.py
+-rw-rw-r-- 1 comp comp  317 Sep 22 14:32 broken.json
+-rw-rw-r-- 1 comp comp 1.8K Sep 22 13:59 compress.py
+-rw-rw-r-- 1 comp comp 1.8K Sep 22 14:07 decompress.py
+-rw-rw-r-- 1 comp comp  10K Sep 18 21:43 dictionary.bin
+-rw-rw-r-- 1 comp comp  167 Sep 22 14:00 example
+-rw-rw-r-- 1 comp comp  317 Sep 22 13:58 example.json
+-rw-rw-r-- 1 comp comp  167 Sep 22 14:03 example.zst
+-rw-rw-r-- 1 comp comp 1.1K Sep 18 21:32 generate_samples.py
+-rw-rw-r-- 1 comp comp  842 Sep 22 14:14 inspect.py
+-rw-rw-r-- 1 comp comp  317 Sep 22 14:08 recovered.json
+-rw-rw-r-- 1 comp comp  317 Sep 22 14:25 recovered_smart.json
+-rw-rw-r-- 1 comp comp  317 Sep 22 14:26 recovered_vanilla.json
+-rw-rw-r-- 1 comp comp   38 Sep 22 14:29 registry.json
+drwxrwxr-x 2 comp comp  20K Sep 18 21:33 samples
+-rw-rw-r-- 1 comp comp 2.7K Sep 22 14:24 smart_decompress.py
+-rw-rw-r-- 1 comp comp  831 Sep 18 21:42 train_dictionary.py
+-rw-rw-r-- 1 comp comp  223 Sep 22 14:14 vanilla.zst
+(.venv) comp@comp:~/Desktop/AIDA/PROJECTS/DICT_PROJECT/zstd-small-files$ mv dictionary.bin dictionary_v1.bin
+(.venv) comp@comp:~/Desktop/AIDA/PROJECTS/DICT_PROJECT/zstd-small-files$ ls -lh dictionary_v1.bin
+-rw-rw-r-- 1 comp comp 10K Sep 18 21:43 dictionary_v1.bin
+(.venv) comp@comp:~/Desktop/AIDA/PROJECTS/DICT_PROJECT/zstd-small-files$ python - <<'PY'
+import json
+from pathlib import Path
+
+path = Path("registry.json")
+registry = json.loads(path.read_text())
+
+updated = False
+
+for dict_id, filename in registry.items():
+    if filename == "dictionary.bin":
+        registry[dict_id] = "dictionary_v1.bin"
+        updated = True
+
+if updated:
+    path.write_text(json.dumps(registry, indent=2) + "\n")
+    print("Registry updated.")
+else:
+    print("No registry entry pointed to dictionary.bin. Check registry.json manually.")
+
+print(json.dumps(registry, indent=2))
+PY
+Registry updated.
+{
+  "1163550679": "dictionary_v1.bin"
+}
+(.venv) comp@comp:~/Desktop/AIDA/PROJECTS/DICT_PROJECT/zstd-small-files$ cat registry.json
+{
+  "1163550679": "dictionary_v1.bin"
+}
+(.venv) comp@comp:~/Desktop/AIDA/PROJECTS/DICT_PROJECT/zstd-small-files$ python smart_decompress.py example.zst step9_check.json
+Input file: example.zst
+Dictionary ID from frame: 1163550679
+Using dictionary file: dictionary_v1.bin
+Recovered output: step9_check.json
+Compressed size: 167 bytes
+Recovered size: 317 bytes
+Dictionary used: dictionary_v1.bin
+Decompression successful.
+(.venv) comp@comp:~/Desktop/AIDA/PROJECTS/DICT_PROJECT/zstd-small-files$ diff example.json step9_check.json && echo OK
+OK
+(.venv) comp@comp:~/Desktop/AIDA/PROJECTS/DICT_PROJECT/zstd-small-files$ 
+
+
+### ASSISTANT
+Yes, your Step 9 output is correct.
+
+Your key proof lines are:
+
+```text
+Dictionary ID from frame: 1163550679
+Using dictionary file: dictionary_v1.bin
+```
+
+and:
+
+```text
+OK
+```
+
+That means:
+
+```text
+registry.json → dictionary_v1.bin → example.zst → example.json
+```
+
+is working correctly.
+
+Also, your first command:
+
+```bash
+.source venv/bin/activate
+```
+
+was just a typo. The correct one is:
+
+```bash
+source .venv/bin/activate
+```
+
+You already fixed it.
+
+---
+
+# Step 10: Add a second dictionary version
+
+Now we move from:
+
+```text
+one dictionary version
+```
+
+to:
+
+```text
+multiple dictionary versions
+```
+
+This is the real production pattern.
+
+You will keep:
+
+```text
+dictionary_v1.bin
+```
+
+and create:
+
+```text
+dictionary_v2.bin
+```
+
+Old compressed files should still use `dictionary_v1.bin`. New compressed files can use `dictionary_v2.bin`.
+
+The smart decompressor will choose the correct dictionary using the Dictionary ID stored inside each `.zst` file.
+
+---
+
+# Goal of Step 10
+
+By the end of this step, you should have:
+
+```text
+dictionary_v1.bin
+dictionary_v2.bin
+example.zst
+example_v2.zst
+registry.json
+```
+
+and your registry should look conceptually like:
+
+```json
+{
+  "1163550679": "dictionary_v1.bin",
+  "NEW_DICT_ID": "dictionary_v2.bin"
+}
+```
+
+Then:
+
+```bash
+python smart_decompress.py example.zst check_v1.json
+python smart_decompress.py example_v2.zst check_v2.json
+```
+
+should both work.
+
+---
+
+# Important rule
+
+Do **not** delete:
+
+```text
+dictionary_v1.bin
+```
+
+Old compressed data may still need it.
+
+---
+
+# 10.1 Create a changed training set: `samples_v2`
+
+We will simulate API evolution by taking your existing samples and adding a few new fields:
+
+```text
+schema_version
+region
+priority
+tags
+```
+
+Run this block:
+
+```bash
+python - <<'PY'
+import json
+import pathlib
+import random
+
+random.seed(20260924)
+
+src = pathlib.Path("samples")
+dst = pathlib.Path("samples_v2")
+dst.mkdir(exist_ok=True)
+
+files = sorted(src.glob("*.json"))
+if not files:
+    files = sorted([p for p in src.iterdir() if p.is_file()])
+
+count = 0
+regions = ["eu-west-1", "us-east-1", "ap-south-1"]
+
+for i, p in enumerate(files):
+    try:
+        obj = json.loads(p.read_text())
+    except Exception:
+        continue
+
+    if isinstance(obj, dict):
+        obj["schema_version"] = 2
+        obj["region"] = regions[i % len(regions)]
+        obj["priority"] = i % 5
+
+        if isinstance(obj.get("tags"), list):
+            obj["tags"] = obj["tags"] + ["v2"]
+        else:
+            obj["tags"] = ["v2"]
+    else:
+        obj = {
+            "schema_version": 2,
+            "payload": obj
+        }
+
+    out = dst / p.name
+    out.write_text(json.dumps(obj, separators=(",", ":")) + "\n")
+    count += 1
+
+# If the original samples folder is too small, add synthetic v2 samples.
+if count < 50:
+    for i in range(100):
+        obj = {
+            "id": 10000 + i,
+            "user": f"user{i:04d}",
+            "email": f"user{i:04d}@example.com",
+            "active": i % 2 == 0,
+            "score": round(random.uniform(0, 100), 2),
+            "schema_version": 2,
+            "region": regions[i % len(regions)],
+            "priority": i % 5,
+            "tags": ["v2", "synthetic", f"batch{i % 7}"]
+        }
+
+        filename = dst / f"sample_v2_{i:03d}.json"
+        filename.write_text(json.dumps(obj, separators=(",", ":")) + "\n")
+        count += 1
+
+print(f"Wrote {count} files to samples_v2")
+PY
+```
+
+Expected output:
+
+```text
+Wrote <some number> files to samples_v2
+```
+
+Check:
+
+```bash
+ls samples_v2 | head
+```
+
+You should see a list of sample files.
+
+---
+
+# 10.2 Train `dictionary_v2.bin`
+
+Now train a new dictionary from the changed samples.
+
+Run:
+
+```bash
+python - <<'PY'
+import pathlib
+import zstandard as zstd
+
+sample_dir = pathlib.Path("samples_v2")
+samples = []
+
+for p in sorted(sample_dir.iterdir()):
+    if p.is_file():
+        samples.append(p.read_bytes())
+
+print("sample count:", len(samples))
+
+if len(samples) < 10:
+    raise SystemExit("Not enough samples in samples_v2")
+
+dictionary = zstd.train_dictionary(10 * 1024, samples)
+pathlib.Path("dictionary_v2.bin").write_bytes(dictionary.as_bytes())
+
+try:
+    print("dictionary ID from training object:", dictionary.dict_id())
+except Exception:
+    pass
+
+print("dictionary_v2.bin written")
+PY
+```
+
+Expected output should include:
+
+```text
+sample count: <number>
+dictionary_v2.bin written
+```
+
+Check that the file exists:
+
+```bash
+ls -lh dictionary_v2.bin
+```
+
+You should see something like:
+
+```text
+-rw-rw-r-- 1 comp comp 10K ... dictionary_v2.bin
+```
+
+---
+
+# 10.3 Create a version-2 example JSON file
+
+Now create a new example payload that matches the newer API shape.
+
+Run:
+
+```bash
+python - <<'PY'
+import json
+import pathlib
+
+base = json.loads(pathlib.Path("example.json").read_text())
+
+if isinstance(base, dict):
+    obj = base.copy()
+    obj["schema_version"] = 2
+    obj["region"] = "eu-west-1"
+    obj["priority"] = 3
+
+    if isinstance(obj.get("tags"), list):
+        obj["tags"] = obj["tags"] + ["v2"]
+    else:
+        obj["tags"] = ["v2"]
+else:
+    obj = {
+        "schema_version": 2,
+        "payload": base
+    }
+
+out = pathlib.Path("example_v2.json")
+out.write_text(json.dumps(obj, separators=(",", ":")))
+
+print(out.read_text())
+PY
+```
+
+Expected output:
+
+```text
+{"...":"...","schema_version":2,"region":"eu-west-1","priority":3,"tags":["...","v2"]}
+```
+
+The exact contents depend on your original `example.json`.
+
+---
+
+# 10.4 Compress `example_v2.json` with `dictionary_v2.bin`
+
+Run:
+
+```bash
+python - <<'PY'
+import pathlib
+import zstandard as zstd
+
+dict_bytes = pathlib.Path("dictionary_v2.bin").read_bytes()
+dictionary = zstd.ZstdCompressionDict(dict_bytes)
+
+cctx = zstd.ZstdCompressor(dict_data=dictionary, level=3)
+
+src = pathlib.Path("example_v2.json").read_bytes()
+compressed = cctx.compress(src)
+
+pathlib.Path("example_v2.zst").write_bytes(compressed)
+
+print("example_v2.json size:", len(src))
+print("example_v2.zst size:", len(compressed))
+PY
+```
+
+Expected output:
+
+```text
+example_v2.json size: <some number>
+example_v2.zst size: <some number>
+```
+
+Check:
+
+```bash
+ls -lh example_v2.json example_v2.zst
+```
+
+---
+
+# 10.5 Add the new Dictionary ID to `registry.json`
+
+Now read the Dictionary ID from `example_v2.zst` and register it.
+
+Run:
+
+```bash
+python - <<'PY'
+import json
+import pathlib
+import zstandard as zstd
+
+frame = pathlib.Path("example_v2.zst").read_bytes()
+params = zstd.get_frame_parameters(frame)
+dict_id = params.dict_id()
+
+if dict_id == 0:
+    raise SystemExit("example_v2.zst has Dictionary ID 0; expected a non-zero dictionary ID")
+
+reg_path = pathlib.Path("registry.json")
+registry = json.loads(reg_path.read_text())
+
+registry[str(dict_id)] = "dictionary_v2.bin"
+
+reg_path.write_text(json.dumps(registry, indent=2) + "\n")
+
+print("New Dictionary ID:", dict_id)
+print(json.dumps(registry, indent=2))
+PY
+```
+
+Expected output:
+
+```text
+New Dictionary ID: <some new number>
+{
+  "1163550679": "dictionary_v1.bin",
+  "<some new number>": "dictionary_v2.bin"
+}
+```
+
+Your new Dictionary ID will probably be different from `1163550679`.
+
+Then confirm:
+
+```bash
+cat registry.json
+```
+
+You should now have two registry entries.
+
+---
+
+# 10.6 Verify that both dictionary versions work
+
+Run:
+
+```bash
+python smart_decompress.py example.zst check_v1.json
+python smart_decompress.py example_v2.zst check_v2.json
+```
+
+Expected behavior:
+
+For `example.zst`, you should see something like:
+
+```text
+Dictionary ID from frame: 1163550679
+Using dictionary file: dictionary_v1.bin
+```
+
+For `example_v2.zst`, you should see something like:
+
+```text
+Dictionary ID from frame: <new ID>
+Using dictionary file: dictionary_v2.bin
+```
+
+Then verify the recovered files:
+
+```bash
+diff example.json check_v1.json && echo V1_OK
+diff example_v2.json check_v2.json && echo V2_OK
+```
+
+Expected final output:
+
+```text
+V1_OK
+V2_OK
+```
+
+---
+
+# Optional cleanup
+
+After verification, you can remove the temporary check files:
+
+```bash
+rm check_v1.json check_v2.json
+```
+
+Keep:
+
+```text
+dictionary_v1.bin
+dictionary_v2.bin
+example.zst
+example_v2.zst
+registry.json
+smart_decompress.py
+```
+
+---
+
+# Common pitfalls
+
+### Pitfall 1: Registry has only one entry
+
+After Step 10.5, your registry should have two entries.
+
+If it only has one entry, stop and paste the output.
+
+---
+
+### Pitfall 2: New Dictionary ID is `0`
+
+If you see:
+
+```text
+example_v2.zst has Dictionary ID 0
+```
+
+then the file was not compressed with a dictionary.
+
+Stop and paste the output.
+
+---
+
+### Pitfall 3: Old file starts using the new dictionary
+
+`example.zst` should still use:
+
+```text
+dictionary_v1.bin
+```
+
+If `example.zst` tries to use `dictionary_v2.bin`, something is wrong with the registry or compressed frame.
+
+---
+
+# Step 10 completion check
+
+You have completed Step 10 when:
+
+```text
+dictionary_v2.bin exists
+example_v2.zst exists
+registry.json has two dictionary IDs
+example.zst decompresses with dictionary_v1.bin
+example_v2.zst decompresses with dictionary_v2.bin
+V1_OK appears
+V2_OK appears
+```
+
+---
+
+# Quick quiz
+
+Answer these after Step 10 works.
+
+### Question 1
+
+Why do we keep `dictionary_v1.bin` after creating `dictionary_v2.bin`?
+
+A. To save disk space  
+B. Because old compressed files may still require the old dictionary  
+C. Because zstd requires every dictionary to be kept forever  
+D. Because the Dictionary ID changes when the filename changes  
+
+---
+
+### Question 2
+
+What tells `smart_decompress.py` which dictionary file to use?
+
+A. The size of the `.zst` file  
+B. The Dictionary ID from the compressed frame, plus the registry  
+C. The file extension  
+D. The compression level  
+
+---
+
+### Question 3
+
+If you train a new dictionary version, what happens to previously compressed files?
+
+A. They are automatically recompressed  
+B. They still contain their original Dictionary ID and need the matching old dictionary  
+C. They become permanently invalid  
+D. They automatically start using the newest dictionary  
+
+---
+
+### Essay
+
+In one or two sentences, explain why adding new JSON fields can be a good reason to train a new dictionary version.
+
+---
+
+Run the Step 10 blocks in order.
+
+If any block fails, paste the exact terminal output from that block. If everything succeeds, paste the final output from:
+
+```bash
+cat registry.json
+python smart_decompress.py example.zst check_v1.json
+python smart_decompress.py example_v2.zst check_v2.json
+diff example.json check_v1.json && echo V1_OK
+diff example_v2.json check_v2.json && echo V2_OK
+```
+
+### USER
+(.venv) comp@comp:~/Desktop/AIDA/PROJECTS/DICT_PROJECT/zstd-small-files$ cat registry.json
+{
+  "1163550679": "dictionary_v1.bin"
+}
+(.venv) comp@comp:~/Desktop/AIDA/PROJECTS/DICT_PROJECT/zstd-small-files$ python smart_decompress.py example.zst step9_check.json
+Input file: example.zst
+Dictionary ID from frame: 1163550679
+Using dictionary file: dictionary_v1.bin
+Recovered output: step9_check.json
+Compressed size: 167 bytes
+Recovered size: 317 bytes
+Dictionary used: dictionary_v1.bin
+Decompression successful.
+(.venv) comp@comp:~/Desktop/AIDA/PROJECTS/DICT_PROJECT/zstd-small-files$ diff example.json step9_check.json && echo OK
+OK
+(.venv) comp@comp:~/Desktop/AIDA/PROJECTS/DICT_PROJECT/zstd-small-files$ schema_ver(.venv) comp@comp:~/Desktop/AIDA/PROJECTS/DICT_PROJECT/zstd-small-files$ diff examp(.venv) comp@comp:~/Desktop/AIDA/PROJECTS/DICT_PROJECT/zstd-small-files$ schema_ver(.venv) comp@comp:~/Desktop/AIDA/PROJECTS/DICT_PROJECT/zstd-small-files$ diff examp
+(.venv) comp@comp:~/Desktop/AIDA/PROJECTS/DICT_PROJECT/zstd-small-files$ ^[[200~python - <<'PY'
+> import json
+> import pathlib
+> import random
+> 
+> random.seed(20260924)
+> 
+> src = pathlib.Path("samples")
+> dst = pathlib.Path("samples_v2")
+> dst.mkdir(exist_ok=True)
+> 
+> files = sorted(src.glob("*.json"))
+> if not files:
+>     files = sorted([p for p in src.iterdir() if p.is_file()])
+> 
+> count = 0
+> regions = ["eu-west-1", "us-east-1", "ap-south-1"]
+> 
+> for i, p in enumerate(files):
+>     try:
+>         obj = json.loads(p.read_text())
+>     except Exception:
+>         continue
+> 
+>     if isinstance(obj, dict):
+>         obj["schema_version"] = 2
+>         obj["region"] = regions[i % len(regions)]
+>         obj["priority"] = i % 5
+> 
+>         if isinstance(obj.get("tags"), list):
+>             obj["tags"] = obj["tags"] + ["v2"]
+>         else:
+>             obj["tags"] = ["v2"]
+>     else:
+>         obj = {
+>             "schema_version": 2,
+>             "payload": obj
+>         }
+> 
+>     out = dst / p.name
+>     out.write_text(json.dumps(obj, separators=(",", ":")) + "\n")
+>     count += 1
+> 
+> # If the original samples folder is too small, add synthetic v2 samples.
+> if count < 50:
+>     for i in range(100):
+>         obj = {
+>             "id": 10000 + i,
+>             "user": f"user{i:04d}",
+>             "email": f"user{i:04d}@example.com",
+>             "active": i % 2 == 0,
+>             "score": round(random.uniform(0, 100), 2),
+>             "schema_version": 2,
+>             "region": regions[i % len(regions)],
+>             "priority": i % 5,
+>             "tags": ["v2", "synthetic", f"batch{i % 7}"]
+>         }
+> 
+>         filename = dst / f"sample_v2_{i:03d}.json"
+>         filename.write_text(json.dumps(obj, separators=(",", ":")) + "\n")
+>         count += 1
+> 
+> print(f"Wrote {count} files to samples_v2")
+> ^[[200~python - <<'PY'
+imdiff example.json step9_check.json && echo OK
+  ^[[200~python - <<'PY'
+import json
+import pathlib
+import random
+
+random.seed(20260924)
+
+src = pathlib.Path("samples")
+dst = pathlib.Path("samples_v2")
+dst.mkdir(exist_ok=True)
+
+files = sorted(src.glob("*.json"))
+if not files:
+    files = sorted([p for p in src.iterdir() if p.is_file()])
+
+count = 0
+regions = ["eu-west-1", "us-east-1", "ap-south-1"]
+
+for i, p in enumerate(files):
+    try:
+        obj = json.loads(p.read_text())
+    except Exception:
+        continue
+
+    if isinstance(obj, dict):
+        obj["schema_version"] = 2
+        obj["region"] = regions[i % len(regions)]
+        obj["priority"] = i % 5
+
+        if isinstance(obj.get("tags"), list):
+            obj["tags"] = obj["tags"] + ["v2"]
+        else:
+            obj["tags"] = ["v2"]
+    else:
+        obj = {
+            "schema_version": 2,
+            "payload": obj
+        }
+
+    out = dst / p.name
+    out.write_text(json.dumps(obj, separators=(",", ":")) + "\n")
+print(f"Wrote {count} files to samples_v2") separators=(",", ":")) + "\n")
+> 
+> ^C
+(.venv) comp@comp:~/Desktop/AIDA/PROJECTS/DICT_PROJECT/zstd-small-files$ python - <<'PY'
+import json
+import pathlib
+import random
+
+random.seed(20260924)
+
+src = pathlib.Path("samples")
+dst = pathlib.Path("samples_v2")
+dst.mkdir(exist_ok=True)
+
+files = sorted(src.glob("*.json"))
+if not files:
+    files = sorted([p for p in src.iterdir() if p.is_file()])
+
+count = 0
+regions = ["eu-west-1", "us-east-1", "ap-south-1"]
+
+for i, p in enumerate(files):
+    try:
+        obj = json.loads(p.read_text())
+    except Exception:
+        continue
+
+    if isinstance(obj, dict):
+        obj["schema_version"] = 2
+        obj["region"] = regions[i % len(regions)]
+        obj["priority"] = i % 5
+
+        if isinstance(obj.get("tags"), list):
+            obj["tags"] = obj["tags"] + ["v2"]
+        else:
+            obj["tags"] = ["v2"]
+    else:
+        obj = {
+            "schema_version": 2,
+            "payload": obj
+        }
+
+    out = dst / p.name
+PYint(f"Wrote {count} files to samples_v2") separators=(",", ":")) + "\n")
+Wrote 500 files to samples_v2
+(.venv) comp@comp:~/Desktop/AIDA/PROJECTS/DICT_PROJECT/zstd-small-files$ ls samples_v2 | head
+sample_0.json
+sample_100.json
+sample_101.json
+sample_102.json
+sample_103.json
+sample_104.json
+sample_105.json
+sample_106.json
+sample_107.json
+sample_108.json
+(.venv) comp@comp:~/Desktop/AIDA/PROJECTS/DICT_PROJECT/zstd-small-files$ python - <<'PY'
+import pathlib
+import zstandard as zstd
+
+sample_dir = pathlib.Path("samples_v2")
+samples = []
+
+for p in sorted(sample_dir.iterdir()):
+    if p.is_file():
+        samples.append(p.read_bytes())
+
+print("sample count:", len(samples))
+
+if len(samples) < 10:
+    raise SystemExit("Not enough samples in samples_v2")
+
+dictionary = zstd.train_dictionary(10 * 1024, samples)
+pathlib.Path("dictionary_v2.bin").write_bytes(dictionary.as_bytes())
+
+try:
+    print("dictionary ID from training object:", dictionary.dict_id())
+except Exception:
+    pass
+
+print("dictionary_v2.bin written")
+PY
+sample count: 500
+dictionary ID from training object: 903694296
+dictionary_v2.bin written
+(.venv) comp@comp:~/Desktop/AIDA/PROJECTS/DICT_PROJECT/zstd-small-files$ sample count: <number>
+dictionary_v2.bin written
+bash: syntax error near unexpected token `newline'
+dictionary_v2.bin: command not found
+(.venv) comp@comp:~/Desktop/AIDA/PROJECTS/DICT_PROJECT/zstd-small-files$ ls samples_v2 | head
+sample_0.json
+sample_100.json
+sample_101.json
+sample_102.json
+sample_103.json
+sample_104.json
+sample_105.json
+sample_106.json
+sample_107.json
+sample_108.json
+(.venv) comp@comp:~/Desktop/AIDA/PROJECTS/DICT_PROJECT/zstd-small-files$ python - <<'PY'
+import pathlib
+import zstandard as zstd
+
+sample_dir = pathlib.Path("samples_v2")
+samples = []
+
+for p in sorted(sample_dir.iterdir()):
+    if p.is_file():
+        samples.append(p.read_bytes())
+
+print("sample count:", len(samples))
+
+if len(samples) < 10:
+    raise SystemExit("Not enough samples in samples_v2")
+
+dictionary = zstd.train_dictionary(10 * 1024, samples)
+pathlib.Path("dictionary_v2.bin").write_bytes(dictionary.as_bytes())
+
+try:
+    print("dictionary ID from training object:", dictionary.dict_id())
+except Exception:
+    pass
+
+print("dictionary_v2.bin written")
+PY
+sample count: 500
+dictionary ID from training object: 903694296
+dictionary_v2.bin written
+(.venv) comp@comp:~/Desktop/AIDA/PROJECTS/DICT_PROJECT/zstd-small-files$ ls -lh dictionary_v2.bin
+-rw-rw-r-- 1 comp comp 10K Sep 24 12:56 dictionary_v2.bin
+(.venv) comp@comp:~/Desktop/AIDA/PROJECTS/DICT_PROJECT/zstd-small-files$ python - <<'PY'
+import json
+import pathlib
+
+base = json.loads(pathlib.Path("example.json").read_text())
+
+if isinstance(base, dict):
+    obj = base.copy()
+    obj["schema_version"] = 2
+    obj["region"] = "eu-west-1"
+    obj["priority"] = 3
+
+    if isinstance(obj.get("tags"), list):
+        obj["tags"] = obj["tags"] + ["v2"]
+    else:
+        obj["tags"] = ["v2"]
+else:
+    obj = {
+        "schema_version": 2,
+        "payload": base
+    }
+
+out = pathlib.Path("example_v2.json")
+out.write_text(json.dumps(obj, separators=(",", ":")))
+
+print(out.read_text())
+PY
+{"request_id":"demo_1","timestamp":"2026-09-22T12:00:00Z","status":"success","user":{"id":7,"role":"admin","email_verified":true},"payload":{"items":[{"sku":"PROD-001","qty":1,"price":9.99}],"currency":"USD"},"schema_version":2,"region":"eu-west-1","priority":3,"tags":["v2"]}
+(.venv) comp@comp:~/Desktop/AIDA/PROJECTS/DICT_PROJECT/zstd-small-files$ python - <<'PY'
+import pathlib
+import zstandard as zstd
+
+dict_bytes = pathlib.Path("dictionary_v2.bin").read_bytes()
+dictionary = zstd.ZstdCompressionDict(dict_bytes)
+
+cctx = zstd.ZstdCompressor(dict_data=dictionary, level=3)
+
+src = pathlib.Path("example_v2.json").read_bytes()
+compressed = cctx.compress(src)
+
+pathlib.Path("example_v2.zst").write_bytes(compressed)
+
+print("example_v2.json size:", len(src))
+print("example_v2.zst size:", len(compressed))
+PY
+example_v2.json size: 276
+example_v2.zst size: 90
+(.venv) comp@comp:~/Desktop/AIDA/PROJECTS/DICT_PROJECT/zstd-small-files$ ls -lh example_v2.json example_v2.zst
+-rw-rw-r-- 1 comp comp 276 Sep 24 12:56 example_v2.json
+-rw-rw-r-- 1 comp comp  90 Sep 24 12:56 example_v2.zst
+(.venv) comp@comp:~/Desktop/AIDA/PROJECTS/DICT_PROJECT/zstd-small-files$ python - <<'PY'
+import json
+import pathlib
+import zstandard as zstd
+
+frame = pathlib.Path("example_v2.zst").read_bytes()
+params = zstd.get_frame_parameters(frame)
+dict_id = params.dict_id()
+
+if dict_id == 0:
+    raise SystemExit("example_v2.zst has Dictionary ID 0; expected a non-zero dictionary ID")
+
+reg_path = pathlib.Path("registry.json")
+registry = json.loads(reg_path.read_text())
+
+registry[str(dict_id)] = "dictionary_v2.bin"
+
+reg_path.write_text(json.dumps(registry, indent=2) + "\n")
+
+print("New Dictionary ID:", dict_id)
+print(json.dumps(registry, indent=2))
+PY
+Traceback (most recent call last):
+  File "<stdin>", line 7, in <module>
+TypeError: 'int' object is not callable
+(.venv) comp@comp:~/Desktop/AIDA/PROJECTS/DICT_PROJECT/zstd-small-files$ python - <<'PY'
+import json
+import pathlib
+import zstandard as zstd
+
+frame = pathlib.Path("example_v2.zst").read_bytes()
+params = zstd.get_frame_parameters(frame)
+dict_id = params.dict_id()
+
+if dict_id == 0:
+    raise SystemExit("example_v2.zst has Dictionary ID 0; expected a non-zero dictionary ID")
+
+reg_path = pathlib.Path("registry.json")
+registry = json.loads(reg_path.read_text())
+
+registry[str(dict_id)] = "dictionary_v2.bin"
+
+reg_path.write_text(json.dumps(registry, indent=2) + "\n")
+
+print("New Dictionary ID:", dict_id)
+print(json.dumps(registry, indent=2))
+PY
+Traceback (most recent call last):
+  File "<stdin>", line 7, in <module>
+TypeError: 'int' object is not callable
+(.venv) comp@comp:~/Desktop/AIDA/PROJECTS/DICT_PROJECT/zstd-small-files$ 
+
+### ASSISTANT
+Ah, that is a very common quirk with the Python `zstandard` library! 
+
+In Step 10.2, we used `dictionary.dict_id()` because for a **training dictionary object**, it is a method. But for **frame parameters** (the compressed file header), `dict_id` is an **attribute**, not a method. 
+
+Because it is already an integer, trying to call it like a function with `()` causes the `TypeError: 'int' object is not callable` error.
+
+*(Also, don't worry about the `^[[200~` characters in your terminal output. That is just your terminal emulator's "bracketed paste mode" glitching visually when you paste large blocks of code. It didn't break your Python execution.)*
+
+Here is the corrected block for **Step 10.5**. Notice that `params.dict_id` no longer has parentheses.
+
+### Corrected 10.5: Add the new Dictionary ID to `registry.json`
+
+```bash
+python - <<'PY'
+import json
+import pathlib
+import zstandard as zstd
+
+frame = pathlib.Path("example_v2.zst").read_bytes()
+params = zstd.get_frame_parameters(frame)
+dict_id = params.dict_id  # Fixed: removed the ()
+
+if dict_id == 0:
+    raise SystemExit("example_v2.zst has Dictionary ID 0; expected a non-zero dictionary ID")
+
+reg_path = pathlib.Path("registry.json")
+registry = json.loads(reg_path.read_text())
+
+registry[str(dict_id)] = "dictionary_v2.bin"
+
+reg_path.write_text(json.dumps(registry, indent=2) + "\n")
+
+print("New Dictionary ID:", dict_id)
+print(json.dumps(registry, indent=2))
+PY
+```
+
+### Expected Output
+You should now see something like:
+```text
+New Dictionary ID: 903694296
+{
+  "1163550679": "dictionary_v1.bin",
+  "903694296": "dictionary_v2.bin"
+}
+```
+
+---
+
+### Next: Run Step 10.6 Verification
+
+Once the registry is updated, run the final verification commands to prove both dictionaries work independently:
+
+```bash
+python smart_decompress.py example.zst check_v1.json
+python smart_decompress.py example_v2.zst check_v2.json
+diff example.json check_v1.json && echo V1_OK
+diff example_v2.json check_v2.json && echo V2_OK
+```
+
+You should see the smart decompressor correctly route `example.zst` to `dictionary_v1.bin` and `example_v2.zst` to `dictionary_v2.bin`, ending with:
+```text
+V1_OK
+V2_OK
+```
+
+Paste the output when you are done, or let me know if you hit any other snags!
+
+### USER
+(.venv) comp@comp:~/Desktop/AIDA/PROJECTS/DICT_PROJECT/zstd-small-files$ python - <<'PY'
+import json
+import pathlib
+import zstandard as zstd
+
+frame = pathlib.Path("example_v2.zst").read_bytes()
+params = zstd.get_frame_parameters(frame)
+dict_id = params.dict_id  # Fixed: removed the ()
+
+if dict_id == 0:
+    raise SystemExit("example_v2.zst has Dictionary ID 0; expected a non-zero dictionary ID")
+
+reg_path = pathlib.Path("registry.json")
+registry = json.loads(reg_path.read_text())
+
+registry[str(dict_id)] = "dictionary_v2.bin"
+
+reg_path.write_text(json.dumps(registry, indent=2) + "\n")
+
+print("New Dictionary ID:", dict_id)
+print(json.dumps(registry, indent=2))
+PY
+New Dictionary ID: 903694296
+{
+  "1163550679": "dictionary_v1.bin",
+  "903694296": "dictionary_v2.bin"
+}
+(.venv) comp@comp:~/Desktop/AIDA/PROJECTS/DICT_PROJECT/zstd-small-files$ python smart_decompress.py example.zst check_v1.json
+python smart_decompress.py example_v2.zst check_v2.json
+diff example.json check_v1.json && echo V1_OK
+diff example_v2.json check_v2.json && echo V2_OK
+Input file: example.zst
+Dictionary ID from frame: 1163550679
+Using dictionary file: dictionary_v1.bin
+Recovered output: check_v1.json
+Compressed size: 167 bytes
+Recovered size: 317 bytes
+Dictionary used: dictionary_v1.bin
+Decompression successful.
+Input file: example_v2.zst
+Dictionary ID from frame: 903694296
+Using dictionary file: dictionary_v2.bin
+Recovered output: check_v2.json
+Compressed size: 90 bytes
+Recovered size: 276 bytes
+Dictionary used: dictionary_v2.bin
+Decompression successful.
+V1_OK
+V2_OK
+(.venv) comp@comp:~/Desktop/AIDA/PROJECTS/DICT_PROJECT/zstd-small-files$ 
+
+
+### ASSISTANT
+Excellent work! Your output is perfect:
+
+```text
+V1_OK
+V2_OK
+```
+
+You have successfully built a multi-version dictionary registry. Your smart decompressor can now seamlessly handle API evolution without breaking backwards compatibility.
+
+---
+
+# Step 10 Quiz
+
+Before we move on to the final production steps, answer these questions to solidify your understanding of dictionary versioning.
+
+### Question 1
+
+Why do we keep `dictionary_v1.bin` after creating `dictionary_v2.bin`?
+
+A. To save disk space  
+B. Because old compressed files may still require the old dictionary  
+C. Because zstd requires every dictionary to be kept forever  
+D. Because the Dictionary ID changes when the filename changes  
+
+---
+
+### Question 2
+
+What tells `smart_decompress.py` which dictionary file to use?
+
+A. The size of the `.zst` file  
+B. The Dictionary ID from the compressed frame, plus the registry  
+C. The file extension  
+D. The compression level  
+
+---
+
+### Question 3
+
+If you train a new dictionary version, what happens to previously compressed files?
+
+A. They are automatically recompressed  
+B. They still contain their original Dictionary ID and need the matching old dictionary  
+C. They become permanently invalid  
+D. They automatically start using the newest dictionary  
+
+---
+
+### Essay
+
+In one or two sentences, explain why adding new JSON fields can be a good reason to train a new dictionary version.
+
+---
+
+Reply with your answers in this format:
+
+```text
+1?, 2?, 3?
+Essay: ...
+```
+
+Or, if you want to skip the quiz and move directly to **Step 11**, reply:
+
+```text
+Skip quiz
+```
+
+### USER
+1B
+2B
+3B
+The new fields would have words that the old dictionary wouldn't be trained on.
+
+### ASSISTANT
+Excellent. Your Step 10 quiz score is:
+
+```text
+Multiple choice: 3 / 3
+Essay: correct
+```
+
+---
+
+# Question 1
+
+You answered:
+
+```text
+B
+```
+
+✅ Correct.
+
+We keep:
+
+```text
+dictionary_v1.bin
+```
+
+because old compressed files may still require it.
+
+---
+
+# Question 2
+
+You answered:
+
+```text
+B
+```
+
+✅ Correct.
+
+The smart decompressor uses:
+
+```text
+Dictionary ID from the compressed frame + registry.json
+```
+
+to choose the correct dictionary file.
+
+Minimal pair:
+
+```text
+Dictionary ID:
+The numeric tag inside the compressed file.
+
+Registry:
+The table that maps that numeric tag to a dictionary filename.
+```
+
+---
+
+# Question 3
+
+You answered:
+
+```text
+B
+```
+
+✅ Correct.
+
+Previously compressed files keep their original Dictionary ID.
+
+They do **not** automatically move to the newest dictionary.
+
+Example:
+
+```text
+Old file:
+Dictionary ID: 1163550679
+Needs: dictionary_v1.bin
+
+New file:
+Dictionary ID: 903694296
+Needs: dictionary_v2.bin
+```
+
+---
+
+# Essay feedback
+
+Your answer:
+
+> The new fields would have words that the old dictionary wouldn't be trained on.
+
+✅ Correct.
+
+A sharper version would be:
+
+> New JSON fields introduce new repeated keys and structural patterns. The old dictionary does not know those patterns, so it cannot compress them as efficiently. Training a new dictionary version lets zstd learn the new repeated patterns and improve compression again.
+
+Example:
+
+Old dictionary learned:
+
+```text
+"request_id"
+"status"
+"user"
+```
+
+New schema adds:
+
+```text
+"schema_version"
+"region"
+"priority"
+"tags"
+```
+
+The old dictionary has never seen those new fields, so a new dictionary can be useful.
+
+---
+
+# Step 11: Make the compression tool version-aware
+
+Right now your original `compress.py` probably still expects:
+
+```text
+dictionary.bin
+```
+
+But we renamed it to:
+
+```text
+dictionary_v1.bin
+```
+
+and we also created:
+
+```text
+dictionary_v2.bin
+```
+
+So now we need a compression tool that can choose a dictionary version.
+
+---
+
+## Phase 1: The Gist
+
+We will upgrade the compression tool so it can do this:
+
+```bash
+python compress.py example.json output.zst dictionary_v1.bin
+```
+
+or:
+
+```bash
+python compress.py example_v2.json output.zst dictionary_v2.bin
+```
+
+One-sentence version:
+
+> The compressor must intentionally choose a dictionary version, while the decompressor later discovers the correct version from the Dictionary ID inside the compressed file.
+
+---
+
+## Phase 2: The Pitfalls
+
+### Pitfall 1: Hardcoding one dictionary filename
+
+Old beginner code often says:
+
+```text
+Always use dictionary.bin
+```
+
+But now we have:
+
+```text
+dictionary_v1.bin
+dictionary_v2.bin
+```
+
+So the compressor needs to be explicit.
+
+Minimal pair:
+
+```text
+Old compressor:
+Assumes one fixed dictionary filename.
+
+Version-aware compressor:
+Accepts a dictionary file as an argument.
+```
+
+Self-correction script:
+
+> Which dictionary version should this payload be compressed with?
+
+---
+
+### Pitfall 2: Confusing the compressor’s job with the decompressor’s job
+
+The compressor chooses the dictionary.
+
+The decompressor reads the Dictionary ID.
+
+Minimal pair:
+
+```text
+Compressor:
+Chooses dictionary_v1.bin or dictionary_v2.bin before compression.
+
+Decompressor:
+Reads the Dictionary ID from the compressed file and looks it up in registry.json.
+```
+
+Self-correction script:
+
+> Am I compressing or decompressing? Compression chooses a dictionary. Decompression discovers the dictionary from the frame.
+
+---
+
+## Phase 3: The Hook
+
+Think of the compressor as the **packing department**.
+
+When the packing department prepares a package, it decides:
+
+```text
+Should we use phrasebook version 1?
+Or phrasebook version 2?
+```
+
+It stamps the compressed file with a tiny luggage ticket:
+
+```text
+Dictionary ID
+```
+
+Later, the decompressor is the **luggage claim desk**.
+
+It does not guess. It reads the ticket and asks:
+
+```text
+Which phrasebook matches this ticket?
+```
+
+Then it loads the correct dictionary.
+
+Where the analogy breaks down:
+
+> The compressed file does not carry the whole phrasebook. It only carries the ticket number. The receiver must already have access to the matching phrasebook.
+
+---
+
+## Phase 4: Why It Matters
+
+This step is a prerequisite for real deployment.
+
+In production, you may have:
+
+```text
+dictionary_v1.bin
+dictionary_v2.bin
+dictionary_v3.bin
+```
+
+The server needs to choose which one to use for new traffic.
+
+Old compressed payloads still carry old Dictionary IDs.
+
+New compressed payloads can carry new Dictionary IDs.
+
+That is how you upgrade compression without breaking old data.
+
+---
+
+# 11.1 Back up your old compression script
+
+Run:
+
+```bash
+cd /home/comp/Desktop/AIDA/PROJECTS/DICT_PROJECT/zstd-small-files
+source .venv/bin/activate
+cp compress.py compress_step5_backup.py
+```
+
+Check:
+
+```bash
+ls -lh compress*.py
+```
+
+You should see something like:
+
+```text
+compress.py
+compress_step5_backup.py
+```
+
+---
+
+# 11.2 Replace `compress.py` with the version-aware tool
+
+Run this whole block:
+
+```bash
+cat > compress.py <<'PY'
+import pathlib
+import sys
+import zstandard as zstd
+
+
+def main():
+    # Usage:
+    # python compress.py input.json output.zst
+    # python compress.py input.json output.zst dictionary_v1.bin
+    # python compress.py input.json output.zst dictionary_v2.bin
+
+    if len(sys.argv) not in (3, 4):
+        print("Usage: python compress.py input_file output_file [dictionary_file]")
+        print("Example: python compress.py example.json example.zst dictionary_v1.bin")
+        sys.exit(1)
+
+    input_path = pathlib.Path(sys.argv[1])
+    output_path = pathlib.Path(sys.argv[2])
+
+    # If no dictionary is provided, default to version 1.
+    if len(sys.argv) == 4:
+        dictionary_path = pathlib.Path(sys.argv[3])
+    else:
+        dictionary_path = pathlib.Path("dictionary_v1.bin")
+
+    if not input_path.exists():
+        print(f"Error: input file not found: {input_path}")
+        sys.exit(1)
+
+    if not dictionary_path.exists():
+        print(f"Error: dictionary file not found: {dictionary_path}")
+        print("Make sure you are inside the project folder and the dictionary exists.")
+        sys.exit(1)
+
+    # Load the chosen dictionary
+    dictionary_bytes = dictionary_path.read_bytes()
+    dictionary = zstd.ZstdCompressionDict(dictionary_bytes)
+
+    # Create compressor using that dictionary
+    compressor = zstd.ZstdCompressor(level=3, dict_data=dictionary)
+
+    # Read original data
+    original_data = input_path.read_bytes()
+
+    # Compress
+    compressed_data = compressor.compress(original_data)
+
+    # Save compressed output
+    output_path.write_bytes(compressed_data)
+
+    # Read back the frame header so we can show the Dictionary ID
+    params = zstd.get_frame_parameters(compressed_data)
+
+    print(f"Dictionary file: {dictionary_path}")
+    print(f"Dictionary ID written into frame: {params.dict_id}")
+    print(f"Input file: {input_path}")
+    print(f"Output file: {output_path}")
+    print(f"Original size: {len(original_data)} bytes")
+    print(f"Compressed size: {len(compressed_data)} bytes")
+
+    if len(compressed_data) < len(original_data):
+        saved = (1 - len(compressed_data) / len(original_data)) * 100
+        print(f"Space saved: {saved:.1f}%")
+    else:
+        print("Compressed file is not smaller than original.")
+
+
+if __name__ == "__main__":
+    main()
+PY
+```
+
+Then verify the file was written:
+
+```bash
+python compress.py
+```
+
+Expected output:
+
+```text
+Usage: python compress.py input_file output_file [dictionary_file]
+Example: python compress.py example.json example.zst dictionary_v1.bin
+```
+
+---
+
+# 11.3 Compress using dictionary version 1
+
+Run:
+
+```bash
+python compress.py example.json step11_v1.zst dictionary_v1.bin
+```
+
+Expected output should mention:
+
+```text
+Dictionary file: dictionary_v1.bin
+Dictionary ID written into frame: 1163550679
+```
+
+Then decompress it:
+
+```bash
+python smart_decompress.py step11_v1.zst step11_v1.json
+```
+
+Expected:
+
+```text
+Using dictionary file: dictionary_v1.bin
+Decompression successful.
+```
+
+Then verify:
+
+```bash
+diff example.json step11_v1.json && echo V1_OK
+```
+
+Expected:
+
+```text
+V1_OK
+```
+
+---
+
+# 11.4 Compress using dictionary version 2
+
+Run:
+
+```bash
+python compress.py example_v2.json step11_v2.zst dictionary_v2.bin
+```
+
+Expected output should mention:
+
+```text
+Dictionary file: dictionary_v2.bin
+Dictionary ID written into frame: 903694296
+```
+
+Then decompress it:
+
+```bash
+python smart_decompress.py step11_v2.zst step11_v2.json
+```
+
+Expected:
+
+```text
+Using dictionary file: dictionary_v2.bin
+Decompression successful.
+```
+
+Then verify:
+
+```bash
+diff example_v2.json step11_v2.json && echo V2_OK
+```
+
+Expected:
+
+```text
+V2_OK
+```
+
+---
+
+# 11.5 Test the default dictionary
+
+If you do not provide a dictionary filename, the tool should default to:
+
+```text
+dictionary_v1.bin
+```
+
+Run:
+
+```bash
+python compress.py example.json step11_default.zst
+```
+
+Expected:
+
+```text
+Dictionary file: dictionary_v1.bin
+Dictionary ID written into frame: 1163550679
+```
+
+Then decompress:
+
+```bash
+python smart_decompress.py step11_default.zst step11_default.json
+```
+
+Then verify:
+
+```bash
+diff example.json step11_default.json && echo DEFAULT_OK
+```
+
+Expected:
+
+```text
+DEFAULT_OK
+```
+
+---
+
+# 11.6 Check your registry is still correct
+
+Run:
+
+```bash
+cat registry.json
+```
+
+You should still see two entries:
+
+```json
+{
+  "1163550679": "dictionary_v1.bin",
+  "903694296": "dictionary_v2.bin"
+}
+```
+
+---
+
+# Optional cleanup
+
+After everything works, you can remove the temporary files:
+
+```bash
+rm step11_v1.json step11_v2.json step11_default.json
+```
+
+You may keep or delete the `.zst` test files:
+
+```bash
+rm step11_v1.zst step11_v2.zst step11_default.zst
+```
+
+Be careful with `rm`.
+
+---
+
+# Step 11 completion check
+
+You have completed Step 11 when:
+
+```text
+compress.py accepts a dictionary file argument
+compress.py works with dictionary_v1.bin
+compress.py works with dictionary_v2.bin
+smart_decompress.py automatically picks the right dictionary
+V1_OK appears
+V2_OK appears
+DEFAULT_OK appears
+```
+
+---
+
+# Step 11 quiz
+
+Answer these after the commands work.
+
+## Question 1: Recall
+
+What is the purpose of the optional third argument in the updated `compress.py`?
+
+A. It chooses the output filename  
+B. It chooses the dictionary file to compress with  
+C. It chooses the compression level  
+D. It chooses the registry file  
+
+---
+
+## Question 2: Discrimination
+
+Which statement is correct?
+
+A. The compressor reads the Dictionary ID from the compressed file, and the decompressor chooses the dictionary before compression  
+B. The compressor chooses the dictionary before compression, and the decompressor later reads the Dictionary ID to find the matching dictionary  
+C. Both compressor and decompressor automatically use the newest dictionary  
+D. The registry is only used during compression  
+
+---
+
+## Question 3: Application
+
+You want to compress a new API payload called:
+
+```text
+new_payload.json
+```
+
+You want it to use:
+
+```text
+dictionary_v2.bin
+```
+
+Which command should you use?
+
+A. `python compress.py new_payload.json output.zst dictionary_v2.bin`  
+B. `python smart_decompress.py new_payload.json output.zst dictionary_v2.bin`  
+C. `python compress.py dictionary_v2.bin new_payload.json output.zst`  
+D. `python compress.py output.zst new_payload.json dictionary_v2.bin`  
+
+---
+
+## Essay
+
+In one or two sentences, explain why the decompressor should not simply always use the newest dictionary.
+
+---
+
+Run the Step 11 commands in order.
+
+If everything works, paste the output from:
+
+```bash
+python compress.py example.json step11_v1.zst dictionary_v1.bin
+python smart_decompress.py step11_v1.zst step11_v1.json
+diff example.json step11_v1.json && echo V1_OK
+
+python compress.py example_v2.json step11_v2.zst dictionary_v2.bin
+python smart_decompress.py step11_v2.zst step11_v2.json
+diff example_v2.json step11_v2.json && echo V2_OK
+
+python compress.py example.json step11_default.zst
+python smart_decompress.py step11_default.zst step11_default.json
+diff example.json step11_default.json && echo DEFAULT_OK
+```
+
+If any command fails, paste the exact terminal output from the failing block.
+
+### USER
+1B
+2B
+3A
+4 The newest dictionary might not have the most well trained data.
+You want me to paste this: python compress.py example.json step11_v1.zst dictionary_v1.bin
+python smart_decompress.py step11_v1.zst step11_v1.json
+diff example.json step11_v1.json && echo V1_OK
+
+python compress.py example_v2.json step11_v2.zst dictionary_v2.bin
+python smart_decompress.py step11_v2.zst step11_v2.json
+diff example_v2.json step11_v2.json && echo V2_OK
+
+python compress.py example.json step11_default.zst
+python smart_decompress.py step11_default.zst step11_default.json
+diff example.json step11_default.json && echo DEFAULT_OK
+
+### ASSISTANT
+Your Step 11 quiz score is:
+
+```text
+Multiple choice: 3 / 3
+Essay: partially correct, but the main reason needs refinement
+```
+
+---
+
+# Question 1
+
+You answered:
+
+```text
+B
+```
+
+✅ Correct.
+
+The optional third argument chooses the dictionary file to compress with.
+
+Example:
+
+```bash
+python compress.py example.json output.zst dictionary_v2.bin
+```
+
+---
+
+# Question 2
+
+You answered:
+
+```text
+B
+```
+
+✅ Correct.
+
+Minimal pair:
+
+```text
+Compressor:
+Chooses the dictionary before compression.
+
+Decompressor:
+Reads the Dictionary ID from the compressed file and finds the matching dictionary.
+```
+
+Self-correction script:
+
+> Am I compressing or decompressing? Compression chooses. Decompression discovers.
+
+---
+
+# Question 3
+
+You answered:
+
+```text
+A
+```
+
+✅ Correct.
+
+The correct command is:
+
+```bash
+python compress.py new_payload.json output.zst dictionary_v2.bin
+```
+
+Argument order:
+
+```text
+input file
+output file
+dictionary file
+```
+
+---
+
+# Essay feedback
+
+Your answer:
+
+> The newest dictionary might not have the most well trained data.
+
+That is partially true, but the stronger reason is compatibility.
+
+A better answer:
+
+> The decompressor must use the dictionary whose Dictionary ID matches the compressed frame. Old files compressed with `dictionary_v1.bin` carry the old Dictionary ID, so they need `dictionary_v1.bin`. The newest dictionary may have a different ID and different contents, so it cannot correctly decompress old files.
+
+Minimal pair:
+
+```text
+Newest dictionary:
+Best for new data if it was trained on the new schema.
+
+Matching dictionary:
+Required for decompressing a specific compressed file.
+```
+
+So the decompressor does not ask:
+
+```text
+Which dictionary is newest?
+```
+
+It asks:
+
+```text
+Which dictionary matches the Dictionary ID in this compressed frame?
+```
+
+---
+
+# About pasting the commands
+
+Yes — you should run those commands, then paste the **terminal output**.
+
+You do not need to paste the command text itself unless something fails and the command context is helpful.
+
+Run this block:
+
+```bash
+cd /home/comp/Desktop/AIDA/PROJECTS/DICT_PROJECT/zstd-small-files
+source .venv/bin/activate
+
+python compress.py example.json step11_v1.zst dictionary_v1.bin
+python smart_decompress.py step11_v1.zst step11_v1.json
+diff example.json step11_v1.json && echo V1_OK
+
+python compress.py example_v2.json step11_v2.zst dictionary_v2.bin
+python smart_decompress.py step11_v2.zst step11_v2.json
+diff example_v2.json step11_v2.json && echo V2_OK
+
+python compress.py example.json step11_default.zst
+python smart_decompress.py step11_default.zst step11_default.json
+diff example.json step11_default.json && echo DEFAULT_OK
+```
+
+Expected final lines:
+
+```text
+V1_OK
+V2_OK
+DEFAULT_OK
+```
+
+If everything works, paste the output, especially the final `V1_OK`, `V2_OK`, and `DEFAULT_OK` lines.
+
+If any command fails, paste the exact terminal output from the first failing command onward.
+
+### USER
+(.venv) comp@comp:~/Desktop/AIDA/PROJECTS/DICT_PROJECT/zstd-small-files$ cd /home/comp/Desktop/AIDA/PROJECTS/DICT_PROJECT/zstd-small-files
+source .venv/bin/activate
+
+python compress.py example.json step11_v1.zst dictionary_v1.bin
+python smart_decompress.py step11_v1.zst step11_v1.json
+diff example.json step11_v1.json && echo V1_OK
+
+python compress.py example_v2.json step11_v2.zst dictionary_v2.bin
+python smart_decompress.py step11_v2.zst step11_v2.json
+diff example_v2.json step11_v2.json && echo V2_OK
+
+python compress.py example.json step11_default.zst
+python smart_decompress.py step11_default.zst step11_default.json
+diff example.json step11_default.json && echo DEFAULT_OK
+Usage: python compress.py input_file output_file
+Example: python compress.py example.json example.zst
+Error: input file not found: step11_v1.zst
+diff: step11_v1.json: No such file or directory
+Usage: python compress.py input_file output_file
+Example: python compress.py example.json example.zst
+Error: input file not found: step11_v2.zst
+diff: step11_v2.json: No such file or directory
+Error: dictionary.bin not found.
+Make sure you are inside the project folder.
+Error: input file not found: step11_default.zst
+diff: step11_default.json: No such file or directory
+(.venv) comp@comp:~/Desktop/AIDA/PROJECTS/DICT_PROJECT/zstd-small-files$ 
+
+
+### ASSISTANT
+Your terminal output shows exactly what went wrong:
+
+```text
+Usage: python compress.py input_file output_file
+...
+Error: dictionary.bin not found.
+```
+
+This means **`compress.py` was not updated**. It is still running the old code from earlier steps, which only accepts two arguments and looks for the old `dictionary.bin` file. 
+
+The Step 11 version should say:
+```text
+Usage: python compress.py input_file output_file [dictionary_file]
+```
+
+Let's fix this by rewriting the file and verifying it before we run the big test block again.
+
+---
+
+### 1. Overwrite `compress.py` again
+
+Copy and paste this entire block into your terminal:
+
+```bash
+cat > compress.py <<'PY'
+import pathlib
+import sys
+import zstandard as zstd
+
+
+def main():
+    # Usage:
+    # python compress.py input.json output.zst
+    # python compress.py input.json output.zst dictionary_v1.bin
+    # python compress.py input.json output.zst dictionary_v2.bin
+
+    if len(sys.argv) not in (3, 4):
+        print("Usage: python compress.py input_file output_file [dictionary_file]")
+        print("Example: python compress.py example.json example.zst dictionary_v1.bin")
+        sys.exit(1)
+
+    input_path = pathlib.Path(sys.argv[1])
+    output_path = pathlib.Path(sys.argv[2])
+
+    # If no dictionary is provided, default to version 1.
+    if len(sys.argv) == 4:
+        dictionary_path = pathlib.Path(sys.argv[3])
+    else:
+        dictionary_path = pathlib.Path("dictionary_v1.bin")
+
+    if not input_path.exists():
+        print(f"Error: input file not found: {input_path}")
+        sys.exit(1)
+
+    if not dictionary_path.exists():
+        print(f"Error: dictionary file not found: {dictionary_path}")
+        print("Make sure you are inside the project folder and the dictionary exists.")
+        sys.exit(1)
+
+    # Load the chosen dictionary
+    dictionary_bytes = dictionary_path.read_bytes()
+    dictionary = zstd.ZstdCompressionDict(dictionary_bytes)
+
+    # Create compressor using that dictionary
+    compressor = zstd.ZstdCompressor(level=3, dict_data=dictionary)
+
+    # Read original data
+    original_data = input_path.read_bytes()
+
+    # Compress
+    compressed_data = compressor.compress(original_data)
+
+    # Save compressed output
+    output_path.write_bytes(compressed_data)
+
+    # Read back the frame header so we can show the Dictionary ID
+    params = zstd.get_frame_parameters(compressed_data)
+
+    print(f"Dictionary file: {dictionary_path}")
+    print(f"Dictionary ID written into frame: {params.dict_id}")
+    print(f"Input file: {input_path}")
+    print(f"Output file: {output_path}")
+    print(f"Original size: {len(original_data)} bytes")
+    print(f"Compressed size: {len(compressed_data)} bytes")
+
+    if len(compressed_data) < len(original_data):
+        saved = (1 - len(compressed_data) / len(original_data)) * 100
+        print(f"Space saved: {saved:.1f}%")
+    else:
+        print("Compressed file is not smaller than original.")
+
+
+if __name__ == "__main__":
+    main()
+PY
+```
+
+---
+
+### 2. Verify the update worked
+
+Run this command with **no arguments**:
+
+```bash
+python compress.py
+```
+
+**Expected output:**
+```text
+Usage: python compress.py input_file output_file [dictionary_file]
+Example: python compress.py example.json example.zst dictionary_v1.bin
+```
+
+*If it still says `Usage: python compress.py input_file output_file` without the `[dictionary_file]` part, stop and tell me. Your terminal might be swallowing the paste.*
+
+---
+
+### 3. Re-run the verification block
+
+Once the usage message is correct, run the full test block again:
+
+```bash
+python compress.py example.json step11_v1.zst dictionary_v1.bin
+python smart_decompress.py step11_v1.zst step11_v1.json
+diff example.json step11_v1.json && echo V1_OK
+
+python compress.py example_v2.json step11_v2.zst dictionary_v2.bin
+python smart_decompress.py step11_v2.zst step11_v2.json
+diff example_v2.json step11_v2.json && echo V2_OK
+
+python compress.py example.json step11_default.zst
+python smart_decompress.py step11_default.zst step11_default.json
+diff example.json step11_default.json && echo DEFAULT_OK
+```
+
+Paste the output when you are done!
+
+### USER
+(.venv) comp@comp:~/Desktop/AIDA/PROJECTS/DICT_PROJECT/zstd-small-files$ cat > compress.py <<'PY'
+import pathlib
+import sys
+import zstandard as zstd
+
+
+def main():
+    # Usage:
+    # python compress.py input.json output.zst
+    # python compress.py input.json output.zst dictionary_v1.bin
+    # python compress.py input.json output.zst dictionary_v2.bin
+
+    if len(sys.argv) not in (3, 4):
+        print("Usage: python compress.py input_file output_file [dictionary_file]") 
+        print("Example: python compress.py example.json example.zst dictionary_v1.bin")
+        sys.exit(1)
+
+    input_path = pathlib.Path(sys.argv[1])
+    output_path = pathlib.Path(sys.argv[2])
+
+    # If no dictionary is provided, default to version 1.
+    if len(sys.argv) == 4:
+        dictionary_path = pathlib.Path(sys.argv[3])
+    else:
+        dictionary_path = pathlib.Path("dictionary_v1.bin")
+
+    if not input_path.exists():
+        print(f"Error: input file not found: {input_path}")
+        sys.exit(1)
+
+    if not dictionary_path.exists():
+        print(f"Error: dictionary file not found: {dictionary_path}")
+        print("Make sure you are inside the project folder and the dictionary exists.")
+        sys.exit(1)
+
+    # Load the chosen dictionary
+    dictionary_bytes = dictionary_path.read_bytes()
+PY  main()_ == "__main__":file is not smaller than original.")) * 100
+(.venv) comp@comp:~/Desktop/AIDA/PROJECTS/DICT_PROJECT/zstd-small-files$ python compress.py
+Usage: python compress.py input_file output_file [dictionary_file]
+Example: python compress.py example.json example.zst dictionary_v1.bin
+(.venv) comp@comp:~/Desktop/AIDA/PROJECTS/DICT_PROJECT/zstd-small-files$ python compress.py example.json step11_v1.zst dictionary_v1.bin
+python smart_decompress.py step11_v1.zst step11_v1.json
+diff example.json step11_v1.json && echo V1_OK
+
+python compress.py example_v2.json step11_v2.zst dictionary_v2.bin
+python smart_decompress.py step11_v2.zst step11_v2.json
+diff example_v2.json step11_v2.json && echo V2_OK
+
+python compress.py example.json step11_default.zst
+python smart_decompress.py step11_default.zst step11_default.json
+diff example.json step11_default.json && echo DEFAULT_OK
+Dictionary file: dictionary_v1.bin
+Dictionary ID written into frame: 1163550679
+Input file: example.json
+Output file: step11_v1.zst
+Original size: 317 bytes
+Compressed size: 167 bytes
+Space saved: 47.3%
+Input file: step11_v1.zst
+Dictionary ID from frame: 1163550679
+Using dictionary file: dictionary_v1.bin
+Recovered output: step11_v1.json
+Compressed size: 167 bytes
+Recovered size: 317 bytes
+Dictionary used: dictionary_v1.bin
+Decompression successful.
+V1_OK
+Dictionary file: dictionary_v2.bin
+Dictionary ID written into frame: 903694296
+Input file: example_v2.json
+Output file: step11_v2.zst
+Original size: 276 bytes
+Compressed size: 90 bytes
+Space saved: 67.4%
+Input file: step11_v2.zst
+Dictionary ID from frame: 903694296
+Using dictionary file: dictionary_v2.bin
+Recovered output: step11_v2.json
+Compressed size: 90 bytes
+Recovered size: 276 bytes
+Dictionary used: dictionary_v2.bin
+Decompression successful.
+V2_OK
+Dictionary file: dictionary_v1.bin
+Dictionary ID written into frame: 1163550679
+Input file: example.json
+Output file: step11_default.zst
+Original size: 317 bytes
+Compressed size: 167 bytes
+Space saved: 47.3%
+Input file: step11_default.zst
+Dictionary ID from frame: 1163550679
+Using dictionary file: dictionary_v1.bin
+Recovered output: step11_default.json
+Compressed size: 167 bytes
+Recovered size: 317 bytes
+Dictionary used: dictionary_v1.bin
+Decompression successful.
+DEFAULT_OK
+(.venv) comp@comp:~/Desktop/AIDA/PROJECTS/DICT_PROJECT/zstd-small-files$ 
+
+
+### ASSISTANT
+Excellent — **Step 11 is complete**.
+
+Your output proves all three required behaviors:
+
+```text
+V1_OK
+V2_OK
+DEFAULT_OK
+```
+
+That means:
+
+```text
+compress.py can choose dictionary_v1.bin
+compress.py can choose dictionary_v2.bin
+compress.py defaults to dictionary_v1.bin
+smart_decompress.py automatically finds the right dictionary from registry.json
+```
+
+Your earlier paste looked slightly garbled in the terminal display, but the actual script works because the commands produced the correct new usage message and correct compression/decompression output.
+
+---
+
+# Step 12: Benchmark dictionary versions
+
+Now we answer the practical question:
+
+> Does `dictionary_v2.bin` actually help the new JSON shape?
+
+And also:
+
+> Does `dictionary_v2.bin` hurt or help old JSON shapes?
+
+---
+
+## Phase 1: The Gist
+
+We will compare:
+
+```text
+vanilla zstd
+dictionary_v1.bin
+dictionary_v2.bin
+```
+
+against:
+
+```text
+old samples
+new samples
+single old example
+single new example
+```
+
+The benchmark will measure compressed size, but it will also verify that every compressed file can be decompressed back to the exact original bytes.
+
+One-sentence version:
+
+> A benchmark is only meaningful if the compressed data can still be recovered correctly.
+
+---
+
+## Phase 2: The Pitfalls
+
+### Pitfall 1: Benchmarking only one example
+
+A single file can be misleading.
+
+Minimal pair:
+
+```text
+One file:
+May be lucky or unlucky.
+
+Many files:
+Gives a more reliable comparison.
+```
+
+Self-correction script:
+
+> Am I comparing dictionaries on enough representative data?
+
+---
+
+### Pitfall 2: Comparing different payloads
+
+You cannot fairly compare dictionary performance like this:
+
+```text
+dictionary_v1 on example.json
+dictionary_v2 on example_v2.json
+```
+
+and conclude that v2 is better.
+
+The payloads are different sizes and different shapes.
+
+A fair benchmark compresses the **same input bytes** with each dictionary and compares the results.
+
+Minimal pair:
+
+```text
+Unfair:
+Different input files.
+
+Fair:
+Same input file, different dictionaries.
+```
+
+---
+
+### Pitfall 3: Forgetting decompression correctness
+
+The smallest compressed file is useless if it cannot be recovered.
+
+Minimal pair:
+
+```text
+Compression-only benchmark:
+Only measures size.
+
+Round-trip benchmark:
+Measures size and proves recovery.
+```
+
+Self-correction script:
+
+> Did I verify that decompression returns the original bytes?
+
+---
+
+## Phase 3: The Hook
+
+Think of this as an **A/B test between two phrasebooks**.
+
+We ask:
+
+```text
+Does phrasebook v1 compress the old API language better?
+Does phrasebook v2 compress the new API language better?
+```
+
+We do not just guess from the phrasebook’s cover. We test it on real luggage.
+
+Where the analogy breaks down:
+
+> In production, we do not always choose the “best” dictionary for every file. We choose the dictionary version that belongs to the payload generation, and the decompressor must match the Dictionary ID.
+
+---
+
+## Phase 4: Why It Matters
+
+Before deploying a new dictionary, you want evidence.
+
+You want to know:
+
+```text
+Does v2 improve new payloads?
+Does v2 accidentally perform worse on old payloads?
+How large is the difference?
+```
+
+This helps you decide whether the new dictionary is worth deploying.
+
+---
+
+# 12.1 Create the benchmark script
+
+Run this whole block:
+
+```bash
+cat > benchmark_versions.py <<'PY'
+import pathlib
+import zstandard as zstd
+
+LIMIT = 50
+
+
+def load_dictionary(path):
+    p = pathlib.Path(path)
+    if not p.exists():
+        raise SystemExit(f"Error: dictionary not found: {path}")
+    return zstd.ZstdCompressionDict(p.read_bytes())
+
+
+def make_compressor(dict_data=None):
+    if dict_data is None:
+        return zstd.ZstdCompressor(level=3)
+    return zstd.ZstdCompressor(level=3, dict_data=dict_data)
+
+
+def make_decompressor(dict_data=None):
+    if dict_data is None:
+        return zstd.ZstdDecompressor()
+    return zstd.ZstdDecompressor(dict_data=dict_data)
+
+
+def compress(data, dict_data=None):
+    return make_compressor(dict_data).compress(data)
+
+
+def decompress(comp, original_size, dict_data=None):
+    # original_size helps if the frame does not store the content size.
+    return make_decompressor(dict_data).decompress(
+        comp,
+        max_output_size=original_size + 1024
+    )
+
+
+def collect_files(directory, limit=LIMIT):
+    p = pathlib.Path(directory)
+    if not p.exists():
+        return []
+
+    files = []
+    for f in sorted(p.iterdir()):
+        if f.is_file():
+            files.append(f)
+            if len(files) == limit:
+                break
+    return files
+
+
+def savings(original, compressed):
+    if original == 0:
+        return 0.0
+    return (1 - compressed / original) * 100
+
+
+def benchmark(name, files, dict_v1, dict_v2):
+    print()
+    print("=" * 60)
+    print(name)
+    print("=" * 60)
+
+    totals = {
+        "original": 0,
+        "vanilla": 0,
+        "v1": 0,
+        "v2": 0,
+    }
+
+    for f in files:
+        original = f.read_bytes()
+
+        vanilla = compress(original, None)
+        v1 = compress(original, dict_v1)
+        v2 = compress(original, dict_v2)
+
+        # Verify round-trip correctness
+        assert decompress(vanilla, len(original), None) == original
+        assert decompress(v1, len(original), dict_v1) == original
+        assert decompress(v2, len(original), dict_v2) == original
+
+        totals["original"] += len(original)
+        totals["vanilla"] += len(vanilla)
+        totals["v1"] += len(v1)
+        totals["v2"] += len(v2)
+
+    print(f"files: {len(files)}")
+    print(f"original: {totals['original']} bytes")
+    print(f"vanilla:  {totals['vanilla']} bytes "
+          f"({savings(totals['original'], totals['vanilla']):.1f}% saved)")
+    print(f"dict_v1:  {totals['v1']} bytes "
+          f"({savings(totals['original'], totals['v1']):.1f}% saved)")
+    print(f"dict_v2:  {totals['v2']} bytes "
+          f"({savings(totals['original'], totals['v2']):.1f}% saved)")
+
+    if totals["v1"] < totals["v2"]:
+        print("Best dictionary for this dataset: dictionary_v1.bin")
+    elif totals["v2"] < totals["v1"]:
+        print("Best dictionary for this dataset: dictionary_v2.bin")
+    else:
+        print("dictionary_v1.bin and dictionary_v2.bin tied")
+
+
+def main():
+    dict_v1 = load_dictionary("dictionary_v1.bin")
+    dict_v2 = load_dictionary("dictionary_v2.bin")
+
+    old_files = collect_files("samples")
+    new_files = collect_files("samples_v2")
+
+    single_old = [pathlib.Path("example.json")]
+    single_new = [pathlib.Path("example_v2.json")]
+
+    benchmark("Old sample batch", old_files, dict_v1, dict_v2)
+    benchmark("New sample batch", new_files, dict_v1, dict_v2)
+    benchmark("Single old example", single_old, dict_v1, dict_v2)
+    benchmark("Single new example", single_new, dict_v1, dict_v2)
+
+
+if __name__ == "__main__":
+    main()
+PY
+```
+
+Check that the file exists:
+
+```bash
+ls -lh benchmark_versions.py
+```
+
+---
+
+# 12.2 Run the benchmark
+
+Run:
+
+```bash
+python benchmark_versions.py
+```
+
+Expected output structure:
+
+```text
+============================================================
+Old sample batch
+============================================================
+files: 50
+original: ...
+vanilla:  ...
+dict_v1:  ...
+dict_v2:  ...
+Best dictionary for this dataset: ...
+
+============================================================
+New sample batch
+============================================================
+files: 50
+original: ...
+vanilla:  ...
+dict_v1:  ...
+dict_v2:  ...
+Best dictionary for this dataset: ...
+
+============================================================
+Single old example
+============================================================
+...
+
+============================================================
+Single new example
+============================================================
+...
+```
+
+The exact numbers will depend on your samples.
+
+The interesting result is usually:
+
+```text
+Old sample batch:
+dictionary_v1.bin often wins.
+
+New sample batch:
+dictionary_v2.bin often wins.
+```
+
+But if the result is different, that is still useful information.
+
+---
+
+# Step 12 completion check
+
+You have completed Step 12 when:
+
+```text
+benchmark_versions.py runs without errors
+it prints four benchmark sections
+no assertion fails
+you can see compressed sizes for vanilla, v1, and v2
+```
+
+---
+
+# Step 12 quiz
+
+Answer these after running the benchmark.
+
+## Question 1: Recall
+
+What is the main metric this benchmark compares?
+
+A. The size of the dictionary file itself  
+B. The compressed output size and space savings, while verifying decompression correctness  
+C. The number of JSON keys in the input file  
+D. The filename length  
+
+---
+
+## Question 2: Discrimination
+
+Why does the benchmark decompress the data after compressing it?
+
+A. To make the benchmark take longer  
+B. Because compressed size is meaningless if the original bytes cannot be recovered  
+C. To automatically update the registry  
+D. To change the Dictionary ID  
+
+---
+
+## Question 3: Application
+
+If `dictionary_v2.bin` compresses the new sample batch better than `dictionary_v1.bin`, what does that suggest?
+
+A. `dictionary_v2.bin` has learned repeated patterns in the newer JSON shape  
+B. `dictionary_v1.bin` automatically updates itself  
+C. The Dictionary IDs have merged  
+D. zstd no longer needs dictionaries  
+
+---
+
+## Essay
+
+In one or two sentences, explain why it is useful to benchmark both old samples and new samples before deciding whether to deploy a new dictionary.
+
+---
+
+When you are done, paste the benchmark output.
+
+If the output is long, you can paste the full output or at least all four sections starting from:
+
+```text
+============================================================
+Old sample batch
+============================================================
+```
+
+### USER
+1B
+2C
+3A
+4 To understand if pre-exisitng dictionaries have patterns that could be efficiently compressed and decompressed material. 
+
+
+
+
+
+(.venv) comp@comp:~/Desktop/AIDA/PROJECTS/DICT_PROJECT/zstd-small-files$ ls -lh benchmark_versions.py
+-rw-rw-r-- 1 comp comp 3.4K Sep 25 16:23 benchmark_versions.py
+(.venv) comp@comp:~/Desktop/AIDA/PROJECTS/DICT_PROJECT/zstd-small-files$ python benchmark_versions.py
+
+============================================================
+Old sample batch
+============================================================
+files: 50
+original: 11376 bytes
+vanilla:  8731 bytes (23.3% saved)
+dict_v1:  1872 bytes (83.5% saved)
+dict_v2:  5402 bytes (52.5% saved)
+Best dictionary for this dataset: dictionary_v1.bin
+
+============================================================
+New sample batch
+============================================================
+files: 50
+original: 13704 bytes
+vanilla:  10373 bytes (24.3% saved)
+dict_v1:  7425 bytes (45.8% saved)
+dict_v2:  2089 bytes (84.8% saved)
+Best dictionary for this dataset: dictionary_v2.bin
+
+============================================================
+Single old example
+============================================================
+files: 1
+original: 317 bytes
+vanilla:  223 bytes (29.7% saved)
+dict_v1:  167 bytes (47.3% saved)
+dict_v2:  201 bytes (36.6% saved)
+Best dictionary for this dataset: dictionary_v1.bin
+
+============================================================
+Single new example
+============================================================
+files: 1
+original: 276 bytes
+vanilla:  219 bytes (20.7% saved)
+dict_v1:  185 bytes (33.0% saved)
+dict_v2:  90 bytes (67.4% saved)
+Best dictionary for this dataset: dictionary_v2.bin
+(.venv) comp@comp:~/Desktop/AIDA/PROJECTS/DICT_PROJECT/zstd-small-files$ 
+
+
+### ASSISTANT
+Your benchmark results are textbook perfect! This is the exact "Aha!" moment of dictionary versioning. 
+
+Look at your numbers:
+*   **Old batch:** `dict_v1` saves **83.5%**, while `dict_v2` only saves **52.5%**.
+*   **New batch:** `dict_v2` saves **84.8%**, while `dict_v1` only saves **45.8%**.
+
+This proves that dictionaries are highly specialized to the data they were trained on. Using the wrong dictionary version leaves a massive amount of compression on the table.
+
+---
+
+### Step 12 Quiz Feedback
+
+Your score is: **2 / 3 Multiple Choice | Essay: Partially Correct**
+
+**Question 1: B (Correct)**
+✅ We measure compressed size and space savings, but *only* after verifying decompression correctness.
+
+**Question 2: C (Incorrect)**
+❌ You chose C ("To automatically update the registry"). 
+*Correct Answer: B (Because compressed size is meaningless if the original bytes cannot be recovered).* 
+Decompression doesn't update the registry; it just reads it. We include the round-trip test in the benchmark to guarantee that our space savings didn't come at the cost of data corruption. If an algorithm shrinks a file to 1 byte but corrupts the text, a 99% savings is worthless.
+
+**Question 3: A (Correct)**
+✅ `dictionary_v2.bin` learned the new repeated patterns (like `"schema_version"`, `"region"`, etc.) that `v1` never saw.
+
+**Essay Feedback:**
+> *Your answer:* "To understand if pre-exisitng dictionaries have patterns that could be efficiently compressed and decompressed material."
+*Refinement:* You are on the right track regarding patterns, but the core reason is **schema drift**. We benchmark both to prove that the new dictionary actually improves compression for the *new* API shape, and to measure the "penalty" if a client accidentally uses the new dictionary on old data (or vice versa). It proves that maintaining multiple versions is mathematically justified.
+
+---
+
+# Step 13: Automate the Training and Registration Pipeline
+
+Right now, creating a new dictionary version requires running several separate Python snippets:
+1. Generate/load samples.
+2. Train the dictionary.
+3. Compress a dummy file to extract the Dictionary ID.
+4. Manually update `registry.json`.
+
+In a production environment, you want a single, repeatable command to do all of this whenever your API schema changes. 
+
+### Goal of Step 13
+We will write a single script called `train_and_register.py`. When you run it, it will automatically train a new dictionary from a folder of samples, save it, extract its Dictionary ID, and update `registry.json` in one go.
+
+---
+
+## 13.1 Create the automation script
+
+Run this block to create the script:
+
+```bash
+cat > train_and_register.py <<'PY'
+import sys
+import json
+import pathlib
+import zstandard as zstd
+
+def main():
+    if len(sys.argv) != 3:
+        print("Usage: python train_and_register.py <samples_dir> <output_dict.bin>")
+        print("Example: python train_and_register.py samples_v2 dictionary_v2.bin")
+        sys.exit(1)
+
+    samples_dir = pathlib.Path(sys.argv[1])
+    out_dict_path = pathlib.Path(sys.argv[2])
+
+    if not samples_dir.is_dir():
+        print(f"Error: {samples_dir} is not a directory")
+        sys.exit(1)
+
+    # 1. Load samples
+    print(f"Loading samples from {samples_dir}...")
+    samples = [p.read_bytes() for p in sorted(samples_dir.iterdir()) if p.is_file()]
+    
+    if len(samples) < 10:
+        print(f"Error: Need at least 10 samples, found {len(samples)}")
+        sys.exit(1)
+
+    # 2. Train the dictionary (10KB max size)
+    print(f"Training dictionary on {len(samples)} samples...")
+    dictionary = zstd.train_dictionary(10 * 1024, samples)
+    out_dict_path.write_bytes(dictionary.as_bytes())
+    print(f"Saved dictionary to {out_dict_path}")
+
+    # 3. Extract the Dictionary ID by compressing a dummy payload
+    cctx = zstd.ZstdCompressor(dict_data=dictionary)
+    dummy_compressed = cctx.compress(b"dummy_payload_for_id_extraction")
+    params = zstd.get_frame_parameters(dummy_compressed)
+    dict_id = params.dict_id
+
+    if dict_id == 0:
+        print("Warning: Dictionary ID is 0. The dictionary might be too small or training failed.")
+
+    # 4. Update registry.json
+    reg_path = pathlib.Path("registry.json")
+    registry = {}
+    if reg_path.exists():
+        registry = json.loads(reg_path.read_text())
+
+    registry[str(dict_id)] = out_dict_path.name
+    reg_path.write_text(json.dumps(registry, indent=2) + "\n")
+
+    print(f"Successfully registered Dictionary ID {dict_id} -> {out_dict_path.name}")
+    print("Updated registry.json:")
+    print(json.dumps(registry, indent=2))
+
+if __name__ == "__main__":
+    main()
+PY
+```
+
+---
+
+## 13.2 Test the automation (Simulating Version 3)
+
+Let's pretend your API evolved again. We will create a quick `samples_v3` folder and use your new script to train `dictionary_v3.bin` and register it automatically.
+
+**Step A: Create a quick v3 sample folder**
+```bash
+mkdir samples_v3
+cp samples_v2/*.json samples_v3/
+```
+
+**Step B: Run your new automation script**
+```bash
+python train_and_register.py samples_v3 dictionary_v3.bin
+```
+
+**Expected Output:**
+```text
+Loading samples from samples_v3...
+Training dictionary on 500 samples...
+Saved dictionary to dictionary_v3.bin
+Successfully registered Dictionary ID <some_new_number> -> dictionary_v3.bin
+Updated registry.json:
+{
+  "1163550679": "dictionary_v1.bin",
+  "903694296": "dictionary_v2.bin",
+  "<some_new_number>": "dictionary_v3.bin"
+}
+```
+
+---
+
+## 13.3 Verify the registry and decompression
+
+Check that your registry now has three entries:
+```bash
+cat registry.json
+```
+
+Now, let's compress a file with v3 and decompress it using the smart decompressor to prove the pipeline works end-to-end:
+
+```bash
+python compress.py example_v2.json test_v3.zst dictionary_v3.bin
+python smart_decompress.py test_v3.zst test_v3_recovered.json
+diff example_v2.json test_v3_recovered.json && echo "V3_PIPELINE_OK"
+```
+
+---
+
+## 13.4 Clean up test files
+
+```bash
+rm test_v3.zst test_v3_recovered.json
+```
+*(You can keep `dictionary_v3.bin` and `samples_v3` if you want, or delete them to keep your folder clean.)*
+
+---
+
+# Step 13 Quiz
+
+### Question 1
+What is the primary benefit of combining the training and registry update steps into a single script like `train_and_register.py`?
+A. It makes the dictionary file size smaller.
+B. It prevents human error and ensures the registry is never out of sync with the newly trained dictionary file.
+C. It allows the decompressor to run faster.
+D. It automatically deletes old dictionary versions.
+
+### Question 2
+How does the script figure out the Dictionary ID to put into `registry.json`?
+A. It asks the user to type it in manually.
+B. It reads the ID directly from the raw `.bin` dictionary file header.
+C. It compresses a dummy payload using the dictionary and reads the Dictionary ID from the resulting compressed frame parameters.
+D. It generates a random number.
+
+### Essay
+In a real production CI/CD pipeline, when would you trigger a script like `train_and_register.py`?
+
+---
+
+Run the commands for Step 13. If everything works, paste the output of the `train_and_register.py` execution and the `V3_PIPELINE_OK` verification. Then, provide your quiz answers!
+
+### USER
+1B
+2B
+What's a CI/ID pipeline?
+
+### ASSISTANT
+Your Step 13 quiz score is:
+
+```text
+Question 1: correct
+Question 2: incorrect
+Essay: replaced by your question, so I will answer it below
+```
+
+---
+
+# Question 1
+
+You answered:
+
+```text
+B
+```
+
+✅ Correct.
+
+Combining training and registry update into one script reduces human error.
+
+Minimal pair:
+
+```text
+Manual process:
+Train dictionary, remember ID, edit registry by hand.
+
+Automated process:
+Train dictionary, extract ID, update registry automatically.
+```
+
+Self-correction script:
+
+> Could a human forget to update the registry after training a new dictionary? If yes, automate it.
+
+---
+
+# Question 2
+
+You answered:
+
+```text
+B
+```
+
+❌ Not quite.
+
+The correct answer is:
+
+```text
+C. It compresses a dummy payload using the dictionary and reads the Dictionary ID from the resulting compressed frame parameters.
+```
+
+In our script, this is the relevant part:
+
+```python
+cctx = zstd.ZstdCompressor(dict_data=dictionary)
+dummy_compressed = cctx.compress(b"dummy_payload_for_id_extraction")
+params = zstd.get_frame_parameters(dummy_compressed)
+dict_id = params.dict_id
+```
+
+The script does not ask you to type the ID manually, and it does not generate a random ID. It discovers the ID by looking at a compressed frame produced with the new dictionary.
+
+---
+
+# What is a CI/CD pipeline?
+
+I think you meant:
+
+```text
+CI/CD pipeline
+```
+
+not:
+
+```text
+CI/ID pipeline
+```
+
+CI/CD stands for:
+
+```text
+Continuous Integration / Continuous Delivery or Continuous Deployment
+```
+
+A CI/CD pipeline is an automated assembly line for software changes.
+
+---
+
+## Phase 1: The Gist
+
+A CI/CD pipeline automatically runs steps like:
+
+```text
+build
+test
+benchmark
+package
+deploy
+monitor
+```
+
+whenever code, configuration, or data changes.
+
+One-sentence version:
+
+> A CI/CD pipeline is an automated process that safely moves changes from a developer’s machine into production.
+
+---
+
+## Phase 2: The Pitfalls
+
+### Pitfall 1: Thinking CI/CD is only about code
+
+CI/CD can also automate data-related changes.
+
+In this project, the “change” might be:
+
+```text
+new JSON fields
+new API schema
+new payload patterns
+new dictionary version
+```
+
+Minimal pair:
+
+```text
+Code CI/CD:
+Automatically test and deploy application code.
+
+Dictionary CI/CD:
+Automatically train, register, test, and deploy dictionary versions.
+```
+
+Self-correction script:
+
+> Is the thing changing only code, or is the data schema changing too?
+
+---
+
+### Pitfall 2: Thinking deployment means “push immediately”
+
+A good pipeline can stop itself if something fails.
+
+Example:
+
+```text
+Train dictionary_v3.bin
+Run benchmark
+If benchmark is worse than expected, stop.
+If benchmark is good, deploy.
+```
+
+Minimal pair:
+
+```text
+Bad pipeline:
+Automatically deploy everything.
+
+Good pipeline:
+Automatically test first, then deploy only if the tests pass.
+```
+
+---
+
+## Phase 3: The Hook
+
+Think of a CI/CD pipeline as a **factory assembly line**.
+
+Instead of a human manually saying:
+
+```text
+Okay, train the dictionary.
+Then remember to update the registry.
+Then test decompression.
+Then copy the dictionary to the server.
+Then hope nothing was forgotten.
+```
+
+The pipeline says:
+
+```text
+When new samples arrive:
+1. Train dictionary.
+2. Register Dictionary ID.
+3. Run compression tests.
+4. Run decompression tests.
+5. Run benchmark.
+6. Deploy if all checks pass.
+```
+
+Where the analogy breaks down:
+
+> A real factory produces physical objects. A CI/CD pipeline produces reproducible, tested software artifacts.
+
+---
+
+## Phase 4: Why It Matters
+
+In production, you do not want to manually train and register dictionaries every time your API changes.
+
+You want an automated process that can say:
+
+```text
+The API added new fields.
+We collected new samples.
+We trained dictionary_v3.bin.
+We verified that it decompresses correctly.
+We benchmarked it against v2.
+It is safe to deploy.
+```
+
+For your zstd dictionary project, a CI/CD-style pipeline might trigger when:
+
+```text
+new JSON fields are added to API payloads
+enough new sample data has been collected
+compression ratio starts getting worse
+a scheduled retraining job runs
+a new API version is released
+```
+
+---
+
+# Essay answer, now that you asked
+
+A good essay answer would be:
+
+> You would trigger `train_and_register.py` in a CI/CD pipeline when the API schema changes or when enough new representative samples have been collected. The pipeline would train a new dictionary, register its Dictionary ID, run benchmark and round-trip tests, and deploy the new dictionary only if it improves compression without breaking compatibility.
+
+---
+
+# Now finish Step 13
+
+You still need to run the Step 13 commands if you have not already.
+
+Run:
+
+```bash
+cd /home/comp/Desktop/AIDA/PROJECTS/DICT_PROJECT/zstd-small-files
+source .venv/bin/activate
+
+mkdir -p samples_v3
+cp samples_v2/*.json samples_v3/
+
+python train_and_register.py samples_v3 dictionary_v3.bin
+
+cat registry.json
+
+python compress.py example_v2.json test_v3.zst dictionary_v3.bin
+python smart_decompress.py test_v3.zst test_v3_recovered.json
+diff example_v2.json test_v3_recovered.json && echo V3_PIPELINE_OK
+```
+
+Expected important lines:
+
+```text
+Successfully registered Dictionary ID <some number> -> dictionary_v3.bin
+...
+V3_PIPELINE_OK
+```
+
+Paste the terminal output when done.
+
+### USER
+(.venv) comp@comp:~/Desktop/AIDA/PROJECTS/DICT_PROJECT/zstd-small-files$ mkdir samples_v3
+cp samples_v2/*.json samples_v3/
+(.venv) comp@comp:~/Desktop/AIDA/PROJECTS/DICT_PROJECT/zstd-small-files$ python train_and_register.py samples_v3 dictionary_v3.bin
+Loading samples from samples_v3...
+Training dictionary on 500 samples...
+Saved dictionary to dictionary_v3.bin
+Successfully registered Dictionary ID 903694296 -> dictionary_v3.bin
+Updated registry.json:
+{
+  "1163550679": "dictionary_v1.bin",
+  "903694296": "dictionary_v3.bin"
+}
+(.venv) comp@comp:~/Desktop/AIDA/PROJECTS/DICT_PROJECT/zstd-small-files$ cat registry.json
+{
+  "1163550679": "dictionary_v1.bin",
+  "903694296": "dictionary_v3.bin"
+}
+(.venv) comp@comp:~/Desktop/AIDA/PROJECTS/DICT_PROJECT/zstd-small-files$ python compress.py example_v2.json test_v3.zst dictionary_v3.bin
+python smart_decompress.py test_v3.zst test_v3_recovered.json
+diff example_v2.json test_v3_recovered.json && echo "V3_PIPELINE_OK"
+Dictionary file: dictionary_v3.bin
+Dictionary ID written into frame: 903694296
+Input file: example_v2.json
+Output file: test_v3.zst
+Original size: 276 bytes
+Compressed size: 90 bytes
+Space saved: 67.4%
+Input file: test_v3.zst
+Dictionary ID from frame: 903694296
+Using dictionary file: dictionary_v3.bin
+Recovered output: test_v3_recovered.json
+Compressed size: 90 bytes
+Recovered size: 276 bytes
+Dictionary used: dictionary_v3.bin
+Decompression successful.
+V3_PIPELINE_OK
+(.venv) comp@comp:~/Desktop/AIDA/PROJECTS/DICT_PROJECT/zstd-small-files$ 
+
+
+### ASSISTANT
+Your automation pipeline worked mechanically:
+
+```text
+V3_PIPELINE_OK
+```
+
+That proves:
+
+```text
+train_and_register.py trained a dictionary
+registry.json was updated
+compress.py used dictionary_v3.bin
+smart_decompress.py found the dictionary from the registry
+decompression recovered the original file
+```
+
+But your output also revealed a very important production pitfall.
+
+---
+
+# The subtle problem
+
+Look at this line:
+
+```text
+Successfully registered Dictionary ID 903694296 -> dictionary_v3.bin
+```
+
+That Dictionary ID is the same one you already had for `dictionary_v2.bin`:
+
+```text
+903694296
+```
+
+Then your registry became:
+
+```json
+{
+  "1163550679": "dictionary_v1.bin",
+  "903694296": "dictionary_v3.bin"
+}
+```
+
+So the new registration silently replaced the old `dictionary_v2.bin` mapping.
+
+That happened because `samples_v3` was just a copy of `samples_v2`:
+
+```bash
+mkdir samples_v3
+cp samples_v2/*.json samples_v3/
+```
+
+So the trainer saw the exact same data and produced the same dictionary identity.
+
+Minimal pair:
+
+```text
+What you intended:
+A new dictionary version trained on changed data.
+
+What actually happened:
+The same training data produced the same Dictionary ID, and the registry overwrote the old mapping.
+```
+
+Self-correction script:
+
+> Did the new sample set actually change? Does the new dictionary have a new Dictionary ID? Did the registry keep the old version intact?
+
+---
+
+# Step 13.5: Fix the versioning mistake
+
+We are going to do three things:
+
+```text
+1. Check whether dictionary_v3.bin is actually identical to dictionary_v2.bin
+2. Restore dictionary_v2.bin in the registry
+3. Create a real changed samples_v3 dataset and train a real dictionary_v3.bin
+```
+
+---
+
+## 13.5.1 Check whether v2 and v3 are identical
+
+Run:
+
+```bash
+cmp dictionary_v2.bin dictionary_v3.bin && echo SAME || echo DIFFERENT
+```
+
+Possible results:
+
+### If it prints:
+
+```text
+SAME
+```
+
+That means the “v3” dictionary is just a duplicate of v2 because the samples were identical.
+
+That is expected from the commands we ran.
+
+Continue below.
+
+---
+
+### If it prints:
+
+```text
+DIFFERENT
+```
+
+That would be more serious: two different dictionaries claiming the same Dictionary ID.
+
+If that happens, stop and paste the output before continuing.
+
+---
+
+## 13.5.2 Restore the registry so ID `903694296` points back to `dictionary_v2.bin`
+
+Run:
+
+```bash
+python - <<'PY'
+import json
+import pathlib
+
+reg_path = pathlib.Path("registry.json")
+registry = json.loads(reg_path.read_text())
+
+# Restore the v2 mapping
+registry["903694296"] = "dictionary_v2.bin"
+
+# Remove any accidental mappings that still point to dictionary_v3.bin
+for dict_id in [k for k, v in registry.items() if v == "dictionary_v3.bin"]:
+    del registry[dict_id]
+
+reg_path.write_text(json.dumps(registry, indent=2) + "\n")
+
+print(json.dumps(registry, indent=2))
+PY
+```
+
+Expected output:
+
+```json
+{
+  "1163550679": "dictionary_v1.bin",
+  "903694296": "dictionary_v2.bin"
+}
+```
+
+Check:
+
+```bash
+cat registry.json
+```
+
+---
+
+## 13.5.3 Create a real changed `samples_v3` dataset
+
+This time we will not merely copy `samples_v2`.
+
+We will add new fields:
+
+```text
+schema_version: 3
+environment
+trace_id
+latency_ms
+tags: ["v3"]
+```
+
+Run:
+
+```bash
+python - <<'PY'
+import json
+import pathlib
+import random
+
+random.seed(20260925)
+
+src = pathlib.Path("samples_v2")
+dst = pathlib.Path("samples_v3")
+dst.mkdir(exist_ok=True)
+
+envs = ["prod", "staging", "dev"]
+
+files = sorted([p for p in src.iterdir() if p.is_file()])
+count = 0
+
+for i, p in enumerate(files):
+    try:
+        obj = json.loads(p.read_text())
+    except Exception:
+        continue
+
+    if isinstance(obj, dict):
+        obj["schema_version"] = 3
+        obj["environment"] = envs[i % len(envs)]
+        obj["trace_id"] = f"trace_{10000 + i}"
+        obj["latency_ms"] = round(random.uniform(1.0, 250.0), 2)
+
+        if isinstance(obj.get("tags"), list):
+            obj["tags"] = obj["tags"] + ["v3"]
+        else:
+            obj["tags"] = ["v3"]
+    else:
+        obj = {
+            "schema_version": 3,
+            "payload": obj
+        }
+
+    out = dst / p.name
+    out.write_text(json.dumps(obj, separators=(",", ":")) + "\n")
+    count += 1
+
+print(f"Wrote {count} changed samples to samples_v3")
+PY
+```
+
+Expected output:
+
+```text
+Wrote 500 changed samples to samples_v3
+```
+
+---
+
+## 13.5.4 Retrain the real `dictionary_v3.bin`
+
+Now run your automation script again:
+
+```bash
+python train_and_register.py samples_v3 dictionary_v3.bin
+```
+
+This time you should see a **new Dictionary ID**, not:
+
+```text
+903694296
+```
+
+Expected shape of output:
+
+```text
+Loading samples from samples_v3...
+Training dictionary on 500 samples...
+Saved dictionary to dictionary_v3.bin
+Successfully registered Dictionary ID <NEW_ID> -> dictionary_v3.bin
+Updated registry.json:
+{
+  "1163550679": "dictionary_v1.bin",
+  "903694296": "dictionary_v2.bin",
+  "<NEW_ID>": "dictionary_v3.bin"
+}
+```
+
+Then check:
+
+```bash
+cat registry.json
+```
+
+You should now have three dictionary entries.
+
+---
+
+## 13.5.5 Create a real version-3 example file
+
+Run:
+
+```bash
+python - <<'PY'
+import json
+import pathlib
+
+obj = json.loads(pathlib.Path("example_v2.json").read_text())
+
+obj["schema_version"] = 3
+obj["environment"] = "prod"
+obj["trace_id"] = "trace_demo_0001"
+obj["latency_ms"] = 12.34
+
+if isinstance(obj.get("tags"), list):
+    obj["tags"] = obj["tags"] + ["v3"]
+else:
+    obj["tags"] = ["v3"]
+
+out = pathlib.Path("example_v3.json")
+out.write_text(json.dumps(obj, separators=(",", ":")))
+
+print(out.read_text())
+PY
+```
+
+Expected output should include:
+
+```text
+"schema_version":3
+"environment":"prod"
+"trace_id":"trace_demo_0001"
+"latency_ms":12.34
+```
+
+---
+
+## 13.5.6 Verify all three dictionary versions still work
+
+Run:
+
+```bash
+python compress.py example.json check_v1.zst dictionary_v1.bin
+python compress.py example_v2.json check_v2.zst dictionary_v2.bin
+python compress.py example_v3.json check_v3.zst dictionary_v3.bin
+
+python smart_decompress.py check_v1.zst check_v1.json
+python smart_decompress.py check_v2.zst check_v2.json
+python smart_decompress.py check_v3.zst check_v3.json
+
+diff example.json check_v1.json && echo V1_OK
+diff example_v2.json check_v2.json && echo V2_OK
+diff example_v3.json check_v3.json && echo V3_OK
+```
+
+Expected final lines:
+
+```text
+V1_OK
+V2_OK
+V3_OK
+```
+
+Also check the registry one more time:
+
+```bash
+cat registry.json
+```
+
+You should see three mappings:
+
+```json
+{
+  "1163550679": "dictionary_v1.bin",
+  "903694296": "dictionary_v2.bin",
+  "<NEW_ID>": "dictionary_v3.bin"
+}
+```
+
+---
+
+# Optional cleanup
+
+After everything works, you can remove the temporary check files:
+
+```bash
+rm check_v1.zst check_v2.zst check_v3.zst
+rm check_v1.json check_v2.json check_v3.json
+```
+
+Be careful with `rm`.
+
+---
+
+# What we learned from this
+
+This was actually a great result because it exposed a real production issue:
+
+```text
+If a new dictionary has the same Dictionary ID as an existing one,
+a naive registry update can silently overwrite the old version.
+```
+
+In a robust production pipeline, `train_and_register.py` should check:
+
+```text
+Does this Dictionary ID already exist?
+If yes, is it the same dictionary file?
+If not, stop and warn instead of silently overwriting.
+```
+
+That will be a good next improvement.
+
+---
+
+Run the corrected Step 13.5 commands.
+
+Then paste the output of:
+
+```bash
+cmp dictionary_v2.bin dictionary_v3.bin && echo SAME || echo DIFFERENT
+python train_and_register.py samples_v3 dictionary_v3.bin
+cat registry.json
+diff example.json check_v1.json && echo V1_OK
+diff example_v2.json check_v2.json && echo V2_OK
+diff example_v3.json check_v3.json && echo V3_OK
+```
+
+### USER
+(.venv) comp@comp:~/Desktop/AIDA/PROJECTS/DICT_PROJECT/zstd-small-files$ cat registry.json
+{
+  "1163550679": "dictionary_v1.bin",
+  "903694296": "dictionary_v3.bin"
+}
+(.venv) comp@comp:~/Desktop/AIDA/PROJECTS/DICT_PROJECT/zstd-small-files$ python compress.py example_v2.json test_v3.zst dictionary_v3.bin
+python smart_decompress.py test_v3.zst test_v3_recovered.json
+diff example_v2.json test_v3_recovered.json && echo "V3_PIPELINE_OK"
+Dictionary file: dictionary_v3.bin
+Dictionary ID written into frame: 903694296
+Input file: example_v2.json
+Output file: test_v3.zst
+Original size: 276 bytes
+Compressed size: 90 bytes
+Space saved: 67.4%
+Input file: test_v3.zst
+Dictionary ID from frame: 903694296
+Using dictionary file: dictionary_v3.bin
+Recovered output: test_v3_recovered.json
+Compressed size: 90 bytes
+Recovered size: 276 bytes
+Dictionary used: dictionary_v3.bin
+Decompression successful.
+V3_PIPELINE_OK
+(.venv) comp@comp:~/Desktop/AIDA/PROJECTS/DICT_PROJECT/zstd-small-files$ cmp dictionary_v2.bin dictionary_v3.bin && echo SAME || echo DIFFERENT
+SAME
+(.venv) comp@comp:~/Desktop/AIDA/PROJECTS/DICT_PROJECT/zstd-small-files$ python - <<'PY'
+import json
+import pathlib
+
+reg_path = pathlib.Path("registry.json")
+registry = json.loads(reg_path.read_text())
+
+# Restore the v2 mapping
+registry["903694296"] = "dictionary_v2.bin"
+
+# Remove any accidental mappings that still point to dictionary_v3.bin
+for dict_id in [k for k, v in registry.items() if v == "dictionary_v3.bin"]:
+    del registry[dict_id]
+
+reg_path.write_text(json.dumps(registry, indent=2) + "\n")
+
+print(json.dumps(registry, indent=2))
+PY
+{
+  "1163550679": "dictionary_v1.bin",
+  "903694296": "dictionary_v2.bin"
+}
+(.venv) comp@comp:~/Desktop/AIDA/PROJECTS/DICT_PROJECT/zstd-small-files$ cat registry.json
+{
+  "1163550679": "dictionary_v1.bin",
+  "903694296": "dictionary_v2.bin"
+}
+(.venv) comp@comp:~/Desktop/AIDA/PROJECTS/DICT_PROJECT/zstd-small-files$ python - <<'PY'
+import json
+import pathlib
+import random
+
+random.seed(20260925)
+
+src = pathlib.Path("samples_v2")
+dst = pathlib.Path("samples_v3")
+dst.mkdir(exist_ok=True)
+
+envs = ["prod", "staging", "dev"]
+
+files = sorted([p for p in src.iterdir() if p.is_file()])
+count = 0
+
+for i, p in enumerate(files):
+    try:
+        obj = json.loads(p.read_text())
+    except Exception:
+        continue
+
+    if isinstance(obj, dict):
+        obj["schema_version"] = 3
+        obj["environment"] = envs[i % len(envs)]
+        obj["trace_id"] = f"trace_{10000 + i}"
+        obj["latency_ms"] = round(random.uniform(1.0, 250.0), 2)
+
+        if isinstance(obj.get("tags"), list):
+            obj["tags"] = obj["tags"] + ["v3"]
+        else:
+            obj["tags"] = ["v3"]
+    else:
+        obj = {
+            "schema_version": 3,
+            "payload": obj
+        }
+
+    out = dst / p.name
+    out.write_text(json.dumps(obj, separators=(",", ":")) + "\n")
+PYint(f"Wrote {count} changed samples to samples_v3")
+Wrote 500 changed samples to samples_v3
+(.venv) comp@comp:~/Desktop/AIDA/PROJECTS/DICT_PROJECT/zstd-small-files$ python train_and_register.py samples_v3 dictionary_v3.bin
+Loading samples from samples_v3...
+Training dictionary on 500 samples...
+Saved dictionary to dictionary_v3.bin
+Successfully registered Dictionary ID 697712713 -> dictionary_v3.bin
+Updated registry.json:
+{
+  "1163550679": "dictionary_v1.bin",
+  "903694296": "dictionary_v2.bin",
+  "697712713": "dictionary_v3.bin"
+}
+(.venv) comp@comp:~/Desktop/AIDA/PROJECTS/DICT_PROJECT/zstd-small-files$ python - <<'PY'
+import json
+import pathlib
+
+obj = json.loads(pathlib.Path("example_v2.json").read_text())
+
+obj["schema_version"] = 3
+obj["environment"] = "prod"
+obj["trace_id"] = "trace_demo_0001"
+obj["latency_ms"] = 12.34
+
+if isinstance(obj.get("tags"), list):
+    obj["tags"] = obj["tags"] + ["v3"]
+else:
+    obj["tags"] = ["v3"]
+
+out = pathlib.Path("example_v3.json")
+out.write_text(json.dumps(obj, separators=(",", ":")))
+
+print(out.read_text())
+PY
+{"request_id":"demo_1","timestamp":"2026-09-22T12:00:00Z","status":"success","user":{"id":7,"role":"admin","email_verified":true},"payload":{"items":[{"sku":"PROD-001","qty":1,"price":9.99}],"currency":"USD"},"schema_version":3,"region":"eu-west-1","priority":3,"tags":["v2","v3"],"environment":"prod","trace_id":"trace_demo_0001","latency_ms":12.34}
+(.venv) comp@comp:~/Desktop/AIDA/PROJECTS/DICT_PROJECT/zstd-small-files$ python compress.py example.json check_v1.zst dictionary_v1.bin
+python compress.py example_v2.json check_v2.zst dictionary_v2.bin
+python compress.py example_v3.json check_v3.zst dictionary_v3.bin
+
+python smart_decompress.py check_v1.zst check_v1.json
+python smart_decompress.py check_v2.zst check_v2.json
+python smart_decompress.py check_v3.zst check_v3.json
+
+diff example.json check_v1.json && echo V1_OK
+diff example_v2.json check_v2.json && echo V2_OK
+diff example_v3.json check_v3.json && echo V3_OK
+Dictionary file: dictionary_v1.bin
+Dictionary ID written into frame: 1163550679
+Input file: example.json
+Output file: check_v1.zst
+Original size: 317 bytes
+Compressed size: 167 bytes
+Space saved: 47.3%
+Dictionary file: dictionary_v2.bin
+Dictionary ID written into frame: 903694296
+Input file: example_v2.json
+Output file: check_v2.zst
+Original size: 276 bytes
+Compressed size: 90 bytes
+Space saved: 67.4%
+Dictionary file: dictionary_v3.bin
+Dictionary ID written into frame: 697712713
+Input file: example_v3.json
+Output file: check_v3.zst
+Original size: 350 bytes
+Compressed size: 107 bytes
+Space saved: 69.4%
+Input file: check_v1.zst
+Dictionary ID from frame: 1163550679
+Using dictionary file: dictionary_v1.bin
+Recovered output: check_v1.json
+Compressed size: 167 bytes
+Recovered size: 317 bytes
+Dictionary used: dictionary_v1.bin
+Decompression successful.
+Input file: check_v2.zst
+Dictionary ID from frame: 903694296
+Using dictionary file: dictionary_v2.bin
+Recovered output: check_v2.json
+Compressed size: 90 bytes
+Recovered size: 276 bytes
+Dictionary used: dictionary_v2.bin
+Decompression successful.
+Input file: check_v3.zst
+Dictionary ID from frame: 697712713
+Using dictionary file: dictionary_v3.bin
+Recovered output: check_v3.json
+Compressed size: 107 bytes
+Recovered size: 350 bytes
+Dictionary used: dictionary_v3.bin
+Decompression successful.
+V1_OK
+V2_OK
+V3_OK
+(.venv) comp@comp:~/Desktop/AIDA/PROJECTS/DICT_PROJECT/zstd-small-files$ cat registry.json
+{
+  "1163550679": "dictionary_v1.bin",
+  "903694296": "dictionary_v2.bin",
+  "697712713": "dictionary_v3.bin"
+}
+(.venv) comp@comp:~/Desktop/AIDA/PROJECTS/DICT_PROJECT/zstd-small-files$ 
+
+
+### ASSISTANT
+Excellent — this is now a **correct three-version dictionary system**.
+
+Your final registry is exactly what we wanted:
+
+```json
+{
+  "1163550679": "dictionary_v1.bin",
+  "903694296": "dictionary_v2.bin",
+  "697712713": "dictionary_v3.bin"
+}
+```
+
+And your final verification proves all three versions work:
+
+```text
+V1_OK
+V2_OK
+V3_OK
+```
+
+You also confirmed the earlier issue:
+
+```text
+SAME
+```
+
+That proved the first `dictionary_v3.bin` was just a duplicate of `dictionary_v2.bin` because `samples_v3` had been copied unchanged from `samples_v2`.
+
+After changing the samples, you got a real new Dictionary ID:
+
+```text
+697712713
+```
+
+That is the correct production behavior.
+
+---
+
+# What you have now
+
+You now have:
+
+```text
+dictionary_v1.bin
+dictionary_v2.bin
+dictionary_v3.bin
+registry.json
+smart_decompress.py
+compress.py
+train_and_register.py
+benchmark_versions.py
+```
+
+and your system can:
+
+```text
+compress with a chosen dictionary version
+decompress using the Dictionary ID
+look up the correct dictionary in registry.json
+train and register new dictionary versions
+benchmark dictionary versions
+```
+
+That is already a strong production-shaped zstd dictionary pipeline.
+
+---
+
+# Step 14: Harden `train_and_register.py`
+
+There is one remaining production weakness.
+
+Your current `train_and_register.py` can still silently overwrite things if used carelessly.
+
+For example:
+
+```text
+It can overwrite registry.json mappings.
+It can overwrite an existing dictionary file.
+It can hide a Dictionary ID collision.
+```
+
+We saw exactly that when the fake `dictionary_v3.bin` replaced the `dictionary_v2.bin` registry entry.
+
+So now we will add safety guards.
+
+---
+
+## Phase 1: The Gist
+
+We will upgrade `train_and_register.py` so it refuses unsafe operations unless you explicitly use:
+
+```bash
+--force
+```
+
+One-sentence version:
+
+> A production training script should fail loudly instead of silently overwriting dictionary versions or registry mappings.
+
+---
+
+## Phase 2: The Pitfalls
+
+### Pitfall 1: Silent registry overwrite
+
+Bad behavior:
+
+```text
+Dictionary ID already exists.
+New dictionary is trained.
+Registry is updated anyway.
+Old mapping disappears.
+```
+
+Safe behavior:
+
+```text
+Dictionary ID already exists.
+Script stops.
+Registry is not changed.
+User must explicitly force the change.
+```
+
+Minimal pair:
+
+```text
+Unsafe script:
+“Same ID? I will replace the old mapping.”
+
+Safe script:
+“Same ID? Stop and ask a human.”
+```
+
+Self-correction script:
+
+> Am I replacing a dictionary version, or accidentally destroying an old one?
+
+---
+
+### Pitfall 2: Overwriting an existing dictionary file
+
+If this file already exists:
+
+```text
+dictionary_v3.bin
+```
+
+then this command:
+
+```bash
+python train_and_register.py samples_v3 dictionary_v3.bin
+```
+
+should not silently replace it.
+
+Safe behavior:
+
+```text
+Error: dictionary_v3.bin already exists.
+Use --force if you really mean it.
+```
+
+---
+
+### Pitfall 3: Dictionary ID collision
+
+A Dictionary ID is supposed to identify a specific dictionary.
+
+If two different dictionary files claim the same Dictionary ID, decompression can become dangerous.
+
+Minimal pair:
+
+```text
+Same ID, same dictionary:
+Usually harmless duplicate.
+
+Same ID, different dictionary:
+Dangerous ambiguity.
+```
+
+Self-correction script:
+
+> Does this Dictionary ID already belong to another dictionary version?
+
+---
+
+## Phase 3: The Hook
+
+Think of `--force` as a safety cover.
+
+Normal operation:
+
+```text
+Train new version.
+If anything looks ambiguous, stop.
+```
+
+Forced operation:
+
+```text
+I understand this may replace something.
+Do it anyway.
+```
+
+Where the analogy breaks down:
+
+> In real production, even `--force` should usually be used only after backups, benchmarks, and review.
+
+---
+
+## Phase 4: Why It Matters
+
+A registry is a source of truth.
+
+If the registry loses the mapping for an old Dictionary ID, old compressed payloads may become unreadable.
+
+For example, if this disappears:
+
+```json
+"903694296": "dictionary_v2.bin"
+```
+
+then files compressed with `dictionary_v2.bin` may fail or be decoded with the wrong dictionary.
+
+That is why automation should be conservative.
+
+---
+
+# 14.1 Back up your current training script
+
+Run:
+
+```bash
+cd /home/comp/Desktop/AIDA/PROJECTS/DICT_PROJECT/zstd-small-files
+source .venv/bin/activate
+
+cp train_and_register.py train_and_register_unsafe_backup.py
+```
+
+Check:
+
+```bash
+ls -lh train_and_register*.py
+```
+
+Expected:
+
+```text
+train_and_register.py
+train_and_register_unsafe_backup.py
+```
+
+---
+
+# 14.2 Replace `train_and_register.py` with the hardened version
+
+Run this whole block:
+
+```bash
+cat > train_and_register.py <<'PY'
+import sys
+import json
+import pathlib
+import zstandard as zstd
+
+
+def main():
+    force = "--force" in sys.argv
+    args = [arg for arg in sys.argv[1:] if arg != "--force"]
+
+    if len(args) != 2:
+        print("Usage: python train_and_register.py <samples_dir> <output_dict.bin> [--force]")
+        print("Example: python train_and_register.py samples_v3 dictionary_v3.bin")
+        sys.exit(1)
+
+    samples_dir = pathlib.Path(args[0])
+    out_dict_path = pathlib.Path(args[1])
+
+    if not samples_dir.is_dir():
+        print(f"Error: {samples_dir} is not a directory")
+        sys.exit(1)
+
+    if out_dict_path.exists() and not force:
+        print(f"Error: output file {out_dict_path} already exists.")
+        print("No changes were made. Use --force to overwrite an existing dictionary file.")
+        sys.exit(1)
+
+    print(f"Loading samples from {samples_dir}...")
+    samples = [p.read_bytes() for p in sorted(samples_dir.iterdir()) if p.is_file()]
+
+    if len(samples) < 10:
+        print(f"Error: Need at least 10 samples, found {len(samples)}")
+        sys.exit(1)
+
+    print(f"Training dictionary on {len(samples)} samples...")
+    dictionary = zstd.train_dictionary(10 * 1024, samples)
+    new_dict_bytes = dictionary.as_bytes()
+
+    # Extract Dictionary ID by compressing a dummy payload
+    cctx = zstd.ZstdCompressor(dict_data=dictionary)
+    dummy_compressed = cctx.compress(b"dummy_payload_for_id_extraction")
+    params = zstd.get_frame_parameters(dummy_compressed)
+    dict_id = params.dict_id
+
+    if dict_id == 0:
+        print("Warning: Dictionary ID is 0. Training may have failed or dictionary is too small.")
+
+    reg_path = pathlib.Path("registry.json")
+    registry = {}
+    if reg_path.exists():
+        registry = json.loads(reg_path.read_text())
+
+    existing_file = registry.get(str(dict_id))
+    if existing_file and not force:
+        print("ERROR: Dictionary ID collision.")
+        print(f"Dictionary ID {dict_id} is already registered to: {existing_file}")
+        print("No changes were made.")
+        print("If you really intend to replace it, rerun with --force.")
+        sys.exit(1)
+
+    out_dict_path.write_bytes(new_dict_bytes)
+    registry[str(dict_id)] = out_dict_path.name
+    reg_path.write_text(json.dumps(registry, indent=2) + "\n")
+
+    print(f"Saved dictionary to {out_dict_path}")
+    print(f"Successfully registered Dictionary ID {dict_id} -> {out_dict_path.name}")
+    print("Updated registry.json:")
+    print(json.dumps(registry, indent=2))
+
+
+if __name__ == "__main__":
+    main()
+PY
+```
+
+Check the new usage message:
+
+```bash
+python train_and_register.py
+```
+
+Expected:
+
+```text
+Usage: python train_and_register.py <samples_dir> <output_dict.bin> [--force]
+Example: python train_and_register.py samples_v3 dictionary_v3.bin
+```
+
+---
+
+# 14.3 Test protection against Dictionary ID collision
+
+This should fail safely.
+
+Run:
+
+```bash
+python train_and_register.py samples_v2 dictionary_v2_collision_test.bin
+```
+
+Expected output should include:
+
+```text
+ERROR: Dictionary ID collision.
+Dictionary ID 903694296 is already registered to: dictionary_v2.bin
+No changes were made.
+```
+
+It should **not** create:
+
+```text
+dictionary_v2_collision_test.bin
+```
+
+Check:
+
+```bash
+ls -lh dictionary_v2_collision_test.bin 2>/dev/null || echo NO_FILE_CREATED
+```
+
+Expected:
+
+```text
+NO_FILE_CREATED
+```
+
+Then verify the registry is unchanged:
+
+```bash
+cat registry.json
+```
+
+You should still see:
+
+```json
+{
+  "1163550679": "dictionary_v1.bin",
+  "903694296": "dictionary_v2.bin",
+  "697712713": "dictionary_v3.bin"
+}
+```
+
+---
+
+# 14.4 Test protection against overwriting an existing dictionary file
+
+This should also fail safely.
+
+Run:
+
+```bash
+python train_and_register.py samples_v3 dictionary_v3.bin
+```
+
+Expected output:
+
+```text
+Error: output file dictionary_v3.bin already exists.
+No changes were made. Use --force to overwrite an existing dictionary file.
+```
+
+Then verify the registry is still unchanged:
+
+```bash
+cat registry.json
+```
+
+Still expected:
+
+```json
+{
+  "1163550679": "dictionary_v1.bin",
+  "903694296": "dictionary_v2.bin",
+  "697712713": "dictionary_v3.bin"
+}
+```
+
+---
+
+# 14.5 Verify your three versions still decompress correctly
+
+Run:
+
+```bash
+python smart_decompress.py example.zst final_v1.json
+python smart_decompress.py example_v2.zst final_v2.json
+python smart_decompress.py check_v3.zst final_v3.json
+
+diff example.json final_v1.json && echo FINAL_V1_OK
+diff example_v2.json final_v2.json && echo FINAL_V2_OK
+diff example_v3.json final_v3.json && echo FINAL_V3_OK
+```
+
+Expected:
+
+```text
+FINAL_V1_OK
+FINAL_V2_OK
+FINAL_V3_OK
+```
+
+If `check_v3.zst` was deleted or missing, recreate it:
+
+```bash
+python compress.py example_v3.json check_v3.zst dictionary_v3.bin
+python smart_decompress.py check_v3.zst final_v3.json
+diff example_v3.json final_v3.json && echo FINAL_V3_OK
+```
+
+---
+
+# Optional cleanup
+
+You can remove temporary final check files:
+
+```bash
+rm final_v1.json final_v2.json final_v3.json
+```
+
+You can also remove earlier temporary files if you want:
+
+```bash
+rm -f step9_check.json
+rm -f step11_v1.zst step11_v1.json
+rm -f step11_v2.zst step11_v2.json
+rm -f step11_default.zst step11_default.json
+rm -f test_v3.zst test_v3_recovered.json
+```
+
+Be careful with `rm`.
+
+---
+
+# Step 14 completion check
+
+You have completed Step 14 when:
+
+```text
+train_and_register.py shows the new usage message
+it refuses Dictionary ID collision without --force
+it refuses to overwrite an existing dictionary file without --force
+registry.json still has three correct entries
+your old compressed examples still decompress correctly
+```
+
+---
+
+# Step 14 quiz
+
+Answer these after running the commands.
+
+## Question 1: Recall
+
+What main problem does the hardened `train_and_register.py` prevent?
+
+A. Slow dictionary training  
+B. Silent overwrite of existing dictionary files or registry mappings  
+C. Loss of JSON field names  
+D. zstd forgetting how to compress  
+
+---
+
+## Question 2: Discrimination
+
+Why does the script check whether the output dictionary file already exists?
+
+A. To avoid accidentally destroying an existing dictionary artifact  
+B. To make the dictionary smaller  
+C. To generate a new Dictionary ID  
+D. To update the sample files  
+
+---
+
+## Question 3: Application
+
+Why does the script check for a Dictionary ID collision before updating `registry.json`?
+
+A. Because the same Dictionary ID pointing to a different dictionary can break correct decompression  
+B. Because `registry.json` should be keyed by filename  
+C. Because Dictionary IDs are optional  
+D. Because zstd automatically resolves duplicate IDs  
+
+---
+
+## Essay
+
+In one or two sentences, when should `--force` be allowed in a production dictionary pipeline?
+
+---
+
+Run the Step 14 commands.
+
+Then paste:
+
+```text
+1? 2? 3?
+Essay: ...
+```
+
+and the important terminal output, especially:
+
+```text
+ERROR: Dictionary ID collision.
+NO_FILE_CREATED
+FINAL_V1_OK
+FINAL_V2_OK
+FINAL_V3_OK
+```

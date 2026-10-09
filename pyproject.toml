@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "zstd_dict_tools"
+version = "1.0.0"
+description = "A self-healing, versioned Zstandard dictionary compression library for small JSON APIs."
+requires-python = ">=3.8"
+dependencies = [
+    "zstandard"
+]
+
+[tool.setuptools.packages.find]
+include = ["zstd_dict_tools*"]
+
+[project.scripts]
+zstd-train = "zstd_dict_tools.trainer:main"

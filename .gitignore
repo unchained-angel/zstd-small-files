@@ -1,0 +1,16 @@
+.venv/
+__pycache__/
+*.pyc
+metrics.db
+*.zst
+downloaded_*.bin
+test_cache.bin
+samples/
+samples_v2/
+samples_v3/
+samples_drift/
+samples_real/
+samples_train/
+samples_test/
+golden_set/
+rolling_window/

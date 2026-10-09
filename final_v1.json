@@ -1,0 +1,21 @@
+{
+  "request_id": "demo_1",
+  "timestamp": "2026-09-22T12:00:00Z",
+  "status": "success",
+  "user": {
+    "id": 7,
+    "role": "admin",
+    "email_verified": true
+  },
+  "payload": {
+    "items": [
+      {
+        "sku": "PROD-001",
+        "qty": 1,
+        "price": 9.99
+      }
+    ],
+    "currency": "USD"
+  }
+}
+

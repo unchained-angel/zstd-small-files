@@ -1,0 +1,10 @@
+pyproject.toml
+zstd_dict_tools/__init__.py
+zstd_dict_tools/compressor.py
+zstd_dict_tools/registry.py
+zstd_dict_tools.egg-info/PKG-INFO
+zstd_dict_tools.egg-info/SOURCES.txt
+zstd_dict_tools.egg-info/dependency_links.txt
+zstd_dict_tools.egg-info/entry_points.txt
+zstd_dict_tools.egg-info/requires.txt
+zstd_dict_tools.egg-info/top_level.txt

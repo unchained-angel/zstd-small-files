@@ -1,0 +1,6 @@
+Metadata-Version: 2.4
+Name: zstd_dict_tools
+Version: 1.0.0
+Summary: A self-healing, versioned Zstandard dictionary compression library for small JSON APIs.
+Requires-Python: >=3.8
+Requires-Dist: zstandard
